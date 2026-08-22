@@ -1,0 +1,27 @@
+# Secrets
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Data cache
+data/*.parquet
+data/*.csv
+data/*.json
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Reports output
+reports/*.html
+reports/*.pdf

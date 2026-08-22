@@ -1,0 +1,45 @@
+name: "📊 CNL — End-of-Day Report (16:30 EST)"
+
+on:
+  schedule:
+    # 4:30 PM EST = 21:30 UTC (standard) | 20:30 UTC (daylight saving)
+    - cron: "30 21 * * 1-5"
+
+  workflow_dispatch:
+    inputs:
+      force_send:
+        description: "Force send even without alerts"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  eod-report:
+    name: "End-of-Day Executive Report"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "🐍 Set up Python 3.11"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: "📦 Install dependencies"
+        run: pip install -r requirements.txt
+
+      - name: "📊 Generate End-of-Day Report"
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          RESEND_API_KEY:     ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_FROM:   ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO:     ${{ secrets.ALERT_EMAIL_TO }}
+          PRICE_ALERT_THRESHOLD:   "3.0"
+          VOLUME_ALERT_MULTIPLIER: "2.0"
+        run: |
+          # EOD always sends a full report (force=true)
+          python scripts/run_alerts.py --mode eod --force

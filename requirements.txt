@@ -1,0 +1,27 @@
+# ============================================================
+# Collective Mining — Executive Dashboard
+# requirements.txt  |  Compatible: Python 3.13+
+# ============================================================
+
+# Data & Finance
+yfinance>=0.2.54
+pandas>=2.2.3
+numpy>=2.0.0              # 2.x has prebuilt wheels for Python 3.13
+pandas-ta>=0.3.14b0
+
+# Visualization
+plotly>=5.22.0
+kaleido>=0.2.1            # Static image export for reports
+
+# Dashboard
+streamlit>=1.36.0
+
+# Alerts & HTTP
+requests>=2.32.3
+python-dotenv>=1.0.1
+
+# Async & Performance
+aiohttp>=3.9.5
+
+# Reporting
+Jinja2>=3.1.4             # HTML email templates

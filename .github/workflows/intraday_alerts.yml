@@ -1,0 +1,48 @@
+name: "🔔 CNL — Intraday Alert Check (Every 30 min)"
+
+on:
+  schedule:
+    # Every 30 minutes during TSX trading hours (14:00–21:00 UTC = 9am-4pm EST + buffer)
+    - cron: "0,30 14-20 * * 1-5"
+
+  workflow_dispatch:
+    inputs:
+      force_send:
+        description: "Force send even without alerts"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  alert-check:
+    name: "Intraday Alert Check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "🐍 Set up Python 3.11"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: "📦 Install dependencies"
+        run: pip install -r requirements.txt
+
+      - name: "🔔 Run Alert Check"
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          RESEND_API_KEY:     ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_FROM:   ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO:     ${{ secrets.ALERT_EMAIL_TO }}
+          PRICE_ALERT_THRESHOLD:   ${{ vars.PRICE_ALERT_THRESHOLD || '3.0' }}
+          VOLUME_ALERT_MULTIPLIER: ${{ vars.VOLUME_ALERT_MULTIPLIER || '2.0' }}
+        run: |
+          FORCE_FLAG=""
+          if [ "${{ github.event.inputs.force_send }}" == "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+          python scripts/run_alerts.py --mode check $FORCE_FLAG
