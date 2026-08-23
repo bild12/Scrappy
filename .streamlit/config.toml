@@ -1,7 +1,13 @@
+# ============================================================
+# Collective Mining — Executive Intelligence Dashboard
+# Streamlit theme, mapped to the Collective Mining Design System
+# (tokens/colors.css · tokens/typography.css)
+# ============================================================
+
 [theme]
-base = "dark"
-backgroundColor      = "#0D1117"
-secondaryBackgroundColor = "#161B22"
-textColor            = "#E6EDF3"
-primaryColor         = "#FFD700"
-font                 = "sans serif"
+base                     = "light"
+primaryColor             = "#20A7C9"   # --cyan-500  · the single accent
+backgroundColor          = "#FFFFFF"   # --surface-page
+secondaryBackgroundColor = "#F7F8F9"   # --surface-subtle
+textColor                = "#4A4A4A"   # --text-body
+font                     = "sans serif"

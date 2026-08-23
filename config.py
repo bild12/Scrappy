@@ -32,7 +32,7 @@ COMPANIES: List[Company] = [
         ticker_primary="CNL.TO",
         ticker_display="CNL (TSX)",
         exchange="TSX",
-        color="#FFD700",          # Gold — brand color
+        color="#20A7C9",          # --cyan-500 · the brand accent
         is_target=True,
     ),
     Company(
@@ -41,7 +41,7 @@ COMPANIES: List[Company] = [
         ticker_primary="FDY.TO",
         ticker_display="FDY (TSX)",
         exchange="TSX",
-        color="#00B4D8",          # Blue
+        color="#B4703C",          # --commodity-copper
     ),
     Company(
         name="Marimaca Copper Corp.",
@@ -49,7 +49,7 @@ COMPANIES: List[Company] = [
         ticker_primary="MARI.TO",
         ticker_display="MARI (TSX)",
         exchange="TSX",
-        color="#06D6A0",          # Teal
+        color="#1E5A80",          # --navy-500
     ),
     Company(
         name="Lumina Metals Corp.",
@@ -57,7 +57,7 @@ COMPANIES: List[Company] = [
         ticker_primary="LMCU.TO",
         ticker_display="LMCU (TSX)",
         exchange="TSX",
-        color="#FF6B35",          # Orange
+        color="#C9A227",          # --commodity-gold
     ),
     Company(
         name="NorthIsle Copper and Gold",
@@ -65,7 +65,7 @@ COMPANIES: List[Company] = [
         ticker_primary="NCX.V",
         ticker_display="NCX (TSX-V)",
         exchange="TSX-V",
-        color="#C77DFF",          # Purple
+        color="#5C6B73",          # --commodity-tungsten
     ),
     Company(
         name="Osisko Metals Inc.",
@@ -73,7 +73,7 @@ COMPANIES: List[Company] = [
         ticker_primary="OM.TO",
         ticker_display="OM (TSX)",
         exchange="TSX",
-        color="#F72585",          # Magenta
+        color="#A8B0B8",          # --commodity-silver
     ),
 ]
 
@@ -131,23 +131,31 @@ MARKET_OPEN_MIN    = 30
 MARKET_CLOSE_HOUR  = 16
 MARKET_CLOSE_MIN   = 0
 
+_FAVICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "favicon.png")
+
 PAGE_CONFIG = {
-    "page_title": "CNL Executive Dashboard",
-    "page_icon": "⛏️",
+    "page_title": "Collective Mining — Executive Intelligence",
+    "page_icon": _FAVICON if os.path.exists(_FAVICON) else None,
     "layout": "wide",
     "initial_sidebar_state": "collapsed",
 }
 
 # ── CHART / THEME TOKENS ─────────────────────────────────────
+# Sourced from the Collective Mining Design System (tokens/colors.css).
+# The full token set lives in src/theme.py; these aliases keep the chart
+# layer readable and are the only colours Plotly ever sees.
 
-CHART_BG_COLOR    = "#0D1117"
-CHART_PAPER_COLOR = "#161B22"
-CHART_GRID_COLOR  = "#21262D"
-CHART_FONT_COLOR  = "#E6EDF3"
-CHART_POSITIVE    = "#00C853"
-CHART_NEGATIVE    = "#FF1744"
-CHART_NEUTRAL     = "#8B949E"
-CHART_ACCENT      = "#FFD700"
+CHART_BG_COLOR    = "#FFFFFF"   # --surface-page
+CHART_PAPER_COLOR = "#FFFFFF"   # --surface-card
+CHART_GRID_COLOR  = "#E1E5E9"   # --border-subtle
+CHART_FONT_COLOR  = "#4A4A4A"   # --text-body
+CHART_TITLE_COLOR = "#333333"   # --text-heading
+CHART_POSITIVE    = "#2E7D51"   # --status-success
+CHART_NEGATIVE    = "#B3341F"   # --status-danger
+CHART_NEUTRAL     = "#9AA3AC"   # --neutral-400
+CHART_ACCENT      = "#20A7C9"   # --cyan-500 · the single accent
+CHART_ACCENT_DEEP = "#1E5A80"   # --navy-500
+CHART_FONT_FAMILY = "Montserrat, 'Helvetica Neue', Arial, sans-serif"
 
-CANDLESTICK_UP    = "#00C853"
-CANDLESTICK_DOWN  = "#FF1744"
+CANDLESTICK_UP    = "#2E7D51"
+CANDLESTICK_DOWN  = "#B3341F"

@@ -3,17 +3,19 @@
 Collective Mining Ltd. — Executive Intelligence Dashboard
 app.py  ·  Entry point: `streamlit run app.py`
 
+Visual structure follows the Collective Mining Design System
+(see src/theme.py). Data, metrics and alert logic are untouched.
+
 Layout:
-  [0] Header bar — logo, title, market status, timestamp
-  [1] CNL Hero Scorecard — 6 KPI cards with sparklines
-  [2] Competitor Comparison Table — color-coded grid
+  [0] Top bar — logo lockup, listing, market status, timestamp
+  [1] CNL Hero Scorecard — 6 KPI cards + volume / range / trend
+  [2] Peer Comparison Table — navy head, zebra rows, CNL highlighted
   [3] Normalized Performance Chart — rebased to 100
-  [4] CNL Candlestick + Volume + MAs
-  [5] Technical Panel — RSI | Bollinger Bands
-  [6] Relative Volume Comparison
-  [7] Returns by Period — bar chart
-  [8] Active Alerts Panel — log of triggered signals
-  [9] Sidebar — controls (period, refresh, export)
+  [4] Deep Dive — candlestick + volume + MAs, RSI, Bollinger Bands
+  [5] Relative Volume + Returns by Period
+  [6] Active Alerts Panel — log of triggered signals
+  [7] Navy footer band
+  [S] Sidebar — controls (period, refresh, dispatch)
 ================================================================
 """
 
@@ -32,6 +34,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import config as cfg
+from src import theme
 from src.data_fetcher import (
     fetch_all_histories,
     fetch_all_quotes,
@@ -59,172 +62,9 @@ EST = ZoneInfo("America/New_York")
 
 st.set_page_config(**cfg.PAGE_CONFIG)
 
-# ── GLOBAL CSS ───────────────────────────────────────────────
+# ── DESIGN SYSTEM ─────────────────────────────────────────────
 
-st.markdown("""
-<style>
-  /* Import Inter font */
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-
-  /* Root dark theme */
-  html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
-    background-color: #0D1117 !important;
-    font-family: 'Inter', 'Segoe UI', sans-serif !important;
-  }
-  [data-testid="stSidebar"] { background-color: #161B22 !important; }
-
-  /* Remove default Streamlit padding */
-  .main .block-container { padding-top: 0.5rem !important; }
-
-  /* Hide Streamlit branding */
-  #MainMenu, footer, header { visibility: hidden; }
-
-  /* ── KPI Card ────────────────────────────────────────── */
-  .kpi-card {
-    background: linear-gradient(145deg, #161B22, #1C2128);
-    border: 1px solid #21262D;
-    border-radius: 12px;
-    padding: 18px 20px;
-    text-align: center;
-    transition: border-color 0.2s;
-    position: relative;
-    overflow: hidden;
-  }
-  .kpi-card:hover { border-color: #FFD700; }
-  .kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #FFD700, transparent);
-  }
-  .kpi-label {
-    color: #8B949E;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-  .kpi-value {
-    color: #E6EDF3;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 22px;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 4px;
-  }
-  .kpi-sub {
-    color: #8B949E;
-    font-size: 11px;
-  }
-  .kpi-positive { color: #00C853 !important; }
-  .kpi-negative { color: #FF1744 !important; }
-  .kpi-neutral  { color: #FFD700 !important; }
-
-  /* ── Section header ─────────────────────────────────── */
-  .section-header {
-    color: #E6EDF3;
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin: 24px 0 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #21262D;
-  }
-
-  /* ── Peer table ──────────────────────────────────────── */
-  .peer-table { width: 100%; border-collapse: collapse; }
-  .peer-table th {
-    background: #21262D;
-    color: #8B949E;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 10px 14px;
-    text-align: right;
-    white-space: nowrap;
-  }
-  .peer-table th:first-child { text-align: left; }
-  .peer-table td {
-    padding: 10px 14px;
-    border-bottom: 1px solid #21262D;
-    color: #C9D1D9;
-    font-size: 13px;
-    text-align: right;
-    white-space: nowrap;
-  }
-  .peer-table td:first-child { text-align: left; }
-  .peer-table tr:hover td { background: #1C2128; }
-  .peer-table .target-row td { background: #1C2128; font-weight: 600; }
-  .ticker-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 0.5px;
-  }
-  .positive { color: #00C853; font-weight: 600; }
-  .negative { color: #FF1744; font-weight: 600; }
-
-  /* ── Alert badge ─────────────────────────────────────── */
-  .alert-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 16px;
-    background: #161B22;
-    border: 1px solid #21262D;
-    border-radius: 8px;
-    margin-bottom: 8px;
-  }
-  .alert-dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 4px;
-  }
-  .alert-critical .alert-dot { background: #FF1744; }
-  .alert-warning  .alert-dot { background: #FFD600; }
-  .alert-info     .alert-dot { background: #00B4D8; }
-  .alert-ticker { color: #FFD700; font-weight: 700; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
-  .alert-msg    { color: #C9D1D9; font-size: 13px; }
-
-  /* ── Dashboard title bar ─────────────────────────────── */
-  .dash-header {
-    background: linear-gradient(135deg, #161B22 0%, #0D1117 100%);
-    border-bottom: 2px solid #FFD700;
-    padding: 18px 24px;
-    margin: -0.5rem -1rem 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .dash-title {
-    color: #FFD700;
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    margin: 0;
-  }
-  .dash-subtitle { color: #8B949E; font-size: 12px; margin-top: 2px; }
-  .status-badge {
-    padding: 4px 14px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-  }
-  .status-open   { background: rgba(0,200,83,0.15); color: #00C853; border: 1px solid rgba(0,200,83,0.3); }
-  .status-closed { background: rgba(255,23,68,0.12); color: #FF1744; border: 1px solid rgba(255,23,68,0.25); }
-</style>
-""", unsafe_allow_html=True)
+theme.inject(st)
 
 
 # ── DATA LOADING (CACHED) ─────────────────────────────────────
@@ -241,34 +81,84 @@ def load_data(period: str = cfg.PERIOD_1Y):
     return histories, quotes, metrics, alerts, normalized
 
 
-# ── HEADER ────────────────────────────────────────────────────
+# ── FORMATTING HELPERS ────────────────────────────────────────
+
+DASH = '<span class="cm-faint">—</span>'
+
+
+def _pct(value, decimals: int = 2) -> str:
+    """Signed percentage with the CM up/down marks. Unicode, never emoji."""
+    if value is None:
+        return DASH
+    mark = "▲" if value >= 0 else "▼"
+    cls  = "cm-pos" if value >= 0 else "cm-neg"
+    return f'<span class="{cls}">{mark} {abs(value):.{decimals}f}%</span>'
+
+
+def _tone(value) -> str:
+    if value is None:
+        return "cm-accent"
+    return "cm-pos" if value >= 0 else "cm-neg"
+
+
+def _money(value, fmt: str = ".3f") -> str:
+    return f"${value:{fmt}}" if value is not None else DASH
+
+
+def _num(value, fmt: str = ".2f") -> str:
+    return f"{value:{fmt}}" if value is not None else DASH
+
+
+def _fmt_vol(vol: int) -> str:
+    if vol >= 1_000_000: return f"{vol/1_000_000:.1f}M"
+    if vol >= 1_000:     return f"{vol/1_000:.0f}K"
+    return str(vol)
+
+
+def _hex_to_rgb_str(hex_color: str) -> str:
+    h = hex_color.lstrip("#")
+    return f"{int(h[0:2],16)},{int(h[2:4],16)},{int(h[4:6],16)}"
+
+
+# ── [0] TOP BAR ───────────────────────────────────────────────
 
 def render_header():
-    market_open = is_market_open()
-    status_class = "status-open" if market_open else "status-closed"
-    status_label = "🟢 TSX OPEN" if market_open else "🔴 TSX CLOSED"
-    now_est = datetime.now(EST).strftime("%b %d, %Y  ·  %I:%M %p EST")
+    market_open  = is_market_open()
+    status_class = "cm-status-open" if market_open else "cm-status-closed"
+    status_label = market_status_label()   # the CSS dot carries the colour
+    now_est      = datetime.now(EST).strftime("%b %d, %Y  ·  %I:%M %p EST")
+
+    logo = theme.asset_data_uri("logo-horizontal.png")
+    logo_html = (
+        f'<img src="{logo}" alt="Collective Mining Ltd." />'
+        f'<span class="cm-brand-divider"></span>'
+        if logo else ""
+    )
 
     st.markdown(f"""
-    <div class="dash-header">
-      <div>
-        <p class="dash-title">⛏️ {cfg.DASHBOARD_TITLE}</p>
-        <p class="dash-subtitle">{cfg.DASHBOARD_SUBTITLE}</p>
+    <div class="cm-topbar">
+      <div class="cm-brand">
+        {logo_html}
+        <div class="cm-brand-copy">
+          <p class="cm-brand-title">Executive Intelligence Dashboard</p>
+          <p class="cm-brand-sub">{cfg.DASHBOARD_SUBTITLE}</p>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <span style="color:#8B949E;font-size:12px;font-family:'JetBrains Mono',monospace;">{now_est}</span>
-        <span class="status-badge {status_class}">{status_label}</span>
+      <div class="cm-topbar-meta">
+        <span class="cm-listing">Nasdaq &amp; TSX: CNL</span>
+        <span class="cm-timestamp">{now_est}</span>
+        <span class="cm-status {status_class}">{status_label}</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
 
-# ── CNL HERO KPI CARDS ────────────────────────────────────────
+# ── [1] CNL HERO SCORECARD ────────────────────────────────────
 
 def render_cnl_scorecard(metrics: dict, histories: dict, quotes: dict):
-    tk     = cfg.TARGET.ticker_primary
-    m      = metrics.get(tk, {})
-    df     = histories.get(tk)
+    tk = cfg.TARGET.ticker_primary
+    m  = metrics.get(tk, {})
+    df = histories.get(tk)
 
     price   = m.get("price", 0)
     chg_pct = m.get("change_1d_pct", 0) or 0
@@ -280,206 +170,194 @@ def render_cnl_scorecard(metrics: dict, histories: dict, quotes: dict):
     sr      = m.get("support_resistance", {})
     curr    = m.get("currency", "CAD")
 
-    def pct_class(v):
-        if v is None:   return "kpi-neutral"
-        return "kpi-positive" if v >= 0 else "kpi-negative"
-
-    def pct_str(v, decimals=2):
-        if v is None: return "—"
-        arrow = "▲" if v >= 0 else "▼"
-        return f"{arrow} {abs(v):.{decimals}f}%"
-
-    st.markdown('<p class="section-header">⭐ Collective Mining Ltd. — CNL (TSX)</p>', unsafe_allow_html=True)
-
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    st.markdown(
+        theme.section_heading(
+            eyebrow="Target Company",
+            title="Collective Mining Ltd.",
+            note=f"{cfg.TARGET.ticker_display} · Guayabales, Caldas · Apollo system",
+        ),
+        unsafe_allow_html=True,
+    )
 
     kpis = [
-        (c1, "PRICE", f"${price:.3f}", curr,          "kpi-neutral"),
-        (c2, "1D CHANGE", pct_str(chg_pct),  "vs. yesterday", pct_class(chg_pct)),
-        (c3, "1M RETURN", pct_str(ret_1m),   "30 days",       pct_class(ret_1m)),
-        (c4, "YTD RETURN", pct_str(ret_ytd), "Year-to-Date",  pct_class(ret_ytd)),
-        (c5, "RSI (14d)", f"{rsi:.0f}" if rsi else "—",
-              "Overbought >70 | Oversold <30", "kpi-neutral"),
-        (c6, "BETA (60d)", f"{beta:.2f}" if beta else "—",
-              f"vs {cfg.BENCHMARK_DISPLAY}", "kpi-neutral"),
+        ("Price",      f"${price:.3f}",                       curr,                            "cm-accent"),
+        ("1D Change",  _pct(chg_pct),                         "vs. previous close",            ""),
+        ("1M Return",  _pct(ret_1m),                          "30 calendar days",              ""),
+        ("YTD Return", _pct(ret_ytd),                         "Year-to-date",                  ""),
+        ("RSI (14d)",  f"{rsi:.0f}" if rsi else DASH,         "Overbought &gt;70 · Oversold &lt;30", "cm-accent"),
+        ("Beta (60d)", f"{beta:.2f}" if beta else DASH,       f"vs. {cfg.BENCHMARK_DISPLAY}",  "cm-accent"),
     ]
 
-    for col, label, value, sub, cls in kpis:
+    for col, (label, value, sub, tone) in zip(st.columns(6), kpis):
         with col:
-            st.markdown(f"""
-            <div class="kpi-card">
-              <div class="kpi-label">{label}</div>
-              <div class="kpi-value {cls}">{value}</div>
-              <div class="kpi-sub">{sub}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(theme.stat_card(label, value, sub, tone), unsafe_allow_html=True)
 
-    # Second row: Volume + S/R + Sparkline
+    # Second row — volume, 52-week range, 90-day trend
     c1, c2, c3 = st.columns([1, 1, 2])
+
     with c1:
         rel_vol = vol.get("rel_vol_20d", 0)
-        rv_cls  = "kpi-negative" if vol.get("is_spike") else "kpi-positive"
-        st.markdown(f"""
-        <div class="kpi-card" style="margin-top:12px;">
-          <div class="kpi-label">RELATIVE VOLUME</div>
-          <div class="kpi-value {rv_cls}">{rel_vol:.1f}×</div>
-          <div class="kpi-sub">vs. 20-day avg ({_fmt_vol(vol.get('vol_today',0))} today)</div>
-        </div>
-        """, unsafe_allow_html=True)
+        rv_tone = "cm-neg" if vol.get("is_spike") else "cm-accent"
+        st.markdown(
+            theme.stat_card(
+                "Relative Volume",
+                f"{rel_vol:.1f}×",
+                f"vs. 20-day average · {_fmt_vol(vol.get('vol_today', 0))} today",
+                rv_tone,
+            ),
+            unsafe_allow_html=True,
+        )
 
     with c2:
         w52h = sr.get("w52_high")
         w52l = sr.get("w52_low")
-        st.markdown(f"""
-        <div class="kpi-card" style="margin-top:12px;">
-          <div class="kpi-label">52-WEEK RANGE</div>
-          <div class="kpi-value kpi-neutral" style="font-size:16px;">${w52l:.3f} — ${w52h:.3f}</div>
-          <div class="kpi-sub">
-            {sr.get('dist_52wh_pct', 0):+.1f}% from high  ·
-            {sr.get('dist_52wl_pct', 0):+.1f}% from low
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        range_value = (
+            f"{_money(w52l)} — {_money(w52h)}"
+            if w52l is not None and w52h is not None else DASH
+        )
+        st.markdown(
+            theme.stat_card(
+                "52-Week Range",
+                range_value,
+                f"{sr.get('dist_52wh_pct', 0):+.1f}% from high · "
+                f"{sr.get('dist_52wl_pct', 0):+.1f}% from low",
+                "cm-accent",
+                small=True,
+            ),
+            unsafe_allow_html=True,
+        )
 
     with c3:
         if df is not None and not df.empty:
+            st.markdown(
+                '<div class="cm-spark-head">'
+                '<div class="cm-card-label">90-Day Trend</div>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
             fig = chart_sparkline(df, cfg.TARGET, days=90)
-            st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 
-def _fmt_vol(vol: int) -> str:
-    if vol >= 1_000_000: return f"{vol/1_000_000:.1f}M"
-    if vol >= 1_000:     return f"{vol/1_000:.0f}K"
-    return str(vol)
-
-
-# ── PEER COMPARISON TABLE ────────────────────────────────────
+# ── [2] PEER COMPARISON TABLE ────────────────────────────────
 
 def render_peer_table(metrics: dict, period: str = "1d"):
-    period_map = {"1d": "1 Day", "1w": "1 Wk", "1m": "1 Mo", "3m": "3 Mo", "ytd": "YTD", "1y": "1 Year"}
+    period_map = {"1d": "1 Day", "1w": "1 Wk", "1m": "1 Mo",
+                  "3m": "3 Mo", "ytd": "YTD", "1y": "1 Year"}
 
-    st.markdown('<p class="section-header">📊 Peer Comparison — Junior Mining</p>', unsafe_allow_html=True)
+    st.markdown(
+        theme.section_heading(
+            eyebrow="Peer Set",
+            title="Junior Mining Comparison",
+            note="Collective Mining against five TSX / TSX-V exploration and development peers.",
+        ),
+        unsafe_allow_html=True,
+    )
 
     rows_html = ""
     for company in cfg.COMPANIES:
-        tk  = company.ticker_primary
-        m   = metrics.get(tk, {})
-        p   = m.get("price")
-        chg = m.get("change_1d_pct")
-        ret = (m.get("returns") or {}).get(period)
-        rsi = m.get("rsi")
-        b   = m.get("beta")
-        vol = m.get("volume", {}).get("rel_vol_20d")
-        sr  = m.get("support_resistance", {})
-        w52h= sr.get("w52_high")
+        tk   = company.ticker_primary
+        m    = metrics.get(tk, {})
+        chg  = m.get("change_1d_pct")
+        ret  = (m.get("returns") or {}).get(period)
+        rsi  = m.get("rsi")
+        beta = m.get("beta")
+        rvol = m.get("volume", {}).get("rel_vol_20d")
+        w52h = m.get("support_resistance", {}).get("w52_high")
 
-        is_target = company.is_target
-        row_class = "target-row" if is_target else ""
-        star      = "⭐ " if is_target else "&nbsp;&nbsp;&nbsp;"
-
-        def _pct(v):
-            if v is None: return '<span style="color:#484F58;">—</span>'
-            cls = "positive" if v >= 0 else "negative"
-            arr = "▲" if v >= 0 else "▼"
-            return f'<span class="{cls}">{arr} {abs(v):.2f}%</span>'
-
-        def _val(v, fmt=".3f"):
-            return f"${v:{fmt}}" if v is not None else '<span style="color:#484F58;">—</span>'
-
-        def _num(v, fmt=".2f"):
-            return f"{v:{fmt}}" if v is not None else '<span style="color:#484F58;">—</span>'
-
-        badge_style = f"background:rgba({_hex_to_rgb_str(company.color)},0.12);color:{company.color};"
+        row_class = "cm-target" if company.is_target else ""
+        rvol_style = (
+            f"color:{theme.STATUS_DANGER};font-weight:600;"
+            if (rvol or 0) >= cfg.VOLUME_ALERT_MULTIPLIER else ""
+        )
+        tag_style = (
+            f"color:{company.color};"
+            f"background:rgba({_hex_to_rgb_str(company.color)},0.08);"
+        )
 
         rows_html += f"""
         <tr class="{row_class}">
           <td>
-            {star}<span class="ticker-badge" style="{badge_style}">{company.ticker_display}</span>
-            &nbsp;<span style="color:#8B949E;font-size:12px;">{company.short_name}</span>
+            <span class="cm-tag" style="{tag_style}">{company.ticker_display}</span>
+            <span class="cm-company">{company.short_name}</span>
           </td>
-          <td style="font-family:'JetBrains Mono',monospace;">{_val(p)}</td>
+          <td>{_money(m.get("price"))}</td>
           <td>{_pct(chg)}</td>
           <td>{_pct(ret)}</td>
-          <td style="color:#FFD700;font-family:'JetBrains Mono',monospace;">{_num(rsi, ".0f")}</td>
-          <td style="color:#C9D1D9;font-family:'JetBrains Mono',monospace;">{_num(b)}</td>
-          <td style="{'color:#FF1744;' if (vol or 0) >= cfg.VOLUME_ALERT_MULTIPLIER else ''};
-                     font-family:'JetBrains Mono',monospace;">{_num(vol, ".1f")}×</td>
-          <td style="font-family:'JetBrains Mono',monospace;">{_val(w52h)}</td>
+          <td>{_num(rsi, ".0f")}</td>
+          <td>{_num(beta)}</td>
+          <td style="{rvol_style}">{_num(rvol, ".1f")}×</td>
+          <td>{_money(w52h)}</td>
         </tr>"""
 
-    period_label = period_map.get(period, period.upper())
     st.markdown(f"""
-    <div style="overflow-x:auto;border:1px solid #21262D;border-radius:10px;overflow:hidden;">
-      <table class="peer-table">
+    <div class="cm-table-wrap">
+      <table class="cm-table">
         <thead>
           <tr>
             <th>Company</th>
             <th>Price (CAD)</th>
             <th>1D Chg</th>
-            <th>{period_label} Rtn</th>
+            <th>{period_map.get(period, period.upper())} Rtn</th>
             <th>RSI</th>
             <th>Beta</th>
-            <th>Rel.Vol</th>
+            <th>Rel. Vol</th>
             <th>52W High</th>
           </tr>
         </thead>
         <tbody>{rows_html}</tbody>
       </table>
     </div>
-    <p style="color:#484F58;font-size:11px;margin-top:8px;">
-      Data: Yahoo Finance · 15-min delay · Beta vs {cfg.BENCHMARK_DISPLAY}
+    <p class="cm-table-note">
+      Source: Yahoo Finance · 15-minute delay · Beta calculated against {cfg.BENCHMARK_DISPLAY}
     </p>
     """, unsafe_allow_html=True)
 
 
-def _hex_to_rgb_str(hex_color: str) -> str:
-    h = hex_color.lstrip("#")
-    return f"{int(h[0:2],16)},{int(h[2:4],16)},{int(h[4:6],16)}"
-
-
-# ── ALERTS PANEL ─────────────────────────────────────────────
+# ── [6] ALERTS PANEL ─────────────────────────────────────────
 
 def render_alerts_panel(alerts: list):
     n = len(alerts)
     has_critical = any(a["severity"] == "critical" for a in alerts)
 
-    title_color = "#FF1744" if has_critical else ("#FFD600" if n > 0 else "#00C853")
-    title_icon  = "🔴" if has_critical else ("🟡" if n > 0 else "✅")
-    title_text  = f"{title_icon} {n} Active Alert(s)" if n > 0 else "✅ No Alerts — All Clear"
+    if n == 0:
+        note = "All monitored thresholds are within range."
+    elif has_critical:
+        note = f"{n} signal(s) triggered — at least one is critical."
+    else:
+        note = f"{n} signal(s) triggered."
 
-    st.markdown(f'<p class="section-header" style="color:{title_color};">{title_text}</p>',
-                unsafe_allow_html=True)
+    st.markdown(
+        theme.section_heading(eyebrow="Signals", title="Active Alerts", note=note),
+        unsafe_allow_html=True,
+    )
 
     if not alerts:
-        st.markdown("""
-        <div style="background:#161B22;border:1px solid #21262D;border-radius:8px;padding:16px;
-                    text-align:center;color:#00C853;font-size:13px;">
-          All thresholds within normal range. No signals triggered.
-        </div>""", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="cm-empty">No signals fired. '
+            "Price, volume, RSI and moving-average thresholds are all within normal range.</div>",
+            unsafe_allow_html=True,
+        )
         return
 
     for a in alerts:
-        sev_colors = {"critical": "#FF1744", "warning": "#FFD600", "info": "#00B4D8"}
-        dot_color  = sev_colors.get(a["severity"], "#8B949E")
-        border     = f"border-left:3px solid {dot_color};"
+        severity = a.get("severity", "info")
         st.markdown(f"""
-        <div class="alert-row" style="{border}">
-          <div class="alert-dot" style="background:{dot_color};"></div>
+        <div class="cm-alert cm-alert-{severity}">
           <div>
-            <span class="alert-ticker">{a['display']}</span>
-            <span style="color:#484F58;margin:0 8px;">·</span>
-            <span style="color:#8B949E;font-size:11px;text-transform:uppercase;
-                         letter-spacing:0.5px;">{a['type'].replace('_',' ')}</span>
-            <div class="alert-msg">{a['message']}</div>
+            <span class="cm-alert-ticker">{a['display']}</span>
+            <span class="cm-faint" style="margin:0 8px;">·</span>
+            <span class="cm-alert-type">{a['type'].replace('_', ' ')}</span>
+            <div class="cm-alert-msg">{a['message']}</div>
           </div>
         </div>""", unsafe_allow_html=True)
 
 
-# ── SIDEBAR ───────────────────────────────────────────────────
+# ── [S] SIDEBAR ───────────────────────────────────────────────
 
 def render_sidebar() -> dict:
     with st.sidebar:
-        st.markdown("## ⚙️ Dashboard Controls")
+        st.markdown('<p class="cm-side-title">Dashboard Controls</p>', unsafe_allow_html=True)
         st.markdown("---")
 
         period = st.selectbox(
@@ -515,40 +393,60 @@ def render_sidebar() -> dict:
         )
 
         st.markdown("---")
-        st.markdown("**Alert Channels**")
-        show_teams = bool(cfg.TEAMS_WEBHOOK_URL)
-        show_email = bool(cfg.RESEND_API_KEY)
-        st.markdown(f"{'🟢' if show_teams else '🔴'} Microsoft Teams")
-        st.markdown(f"{'🟢' if show_email else '🔴'} Email (Resend)")
+        st.markdown('<p class="cm-side-title">Alert Channels</p>', unsafe_allow_html=True)
+        teams_cls = "cm-channel-on" if cfg.TEAMS_WEBHOOK_URL else "cm-channel-off"
+        email_cls = "cm-channel-on" if cfg.RESEND_API_KEY else "cm-channel-off"
+        st.markdown(
+            f'<div class="cm-channel {teams_cls}">Microsoft Teams</div>'
+            f'<div class="cm-channel {email_cls}">Email (Resend)</div>',
+            unsafe_allow_html=True,
+        )
 
         st.markdown("---")
-        if st.button("🔄 Force Refresh Data", width='stretch'):
+        if st.button("Force Refresh Data", width="stretch"):
             st.cache_data.clear()
             st.rerun()
 
-        send_now = st.button("📧 Send Alert Now", width='stretch', type="primary")
+        send_now = st.button("Send Alert Now", width="stretch", type="primary")
 
         st.markdown("---")
         st.markdown(f"""
-        <div style="color:#484F58;font-size:11px;line-height:1.6;">
-          <b style="color:#8B949E;">Data Source</b><br>
-          Yahoo Finance (15-min delay)<br><br>
-          <b style="color:#8B949E;">Refresh Interval</b><br>
+        <div class="cm-side-block">
+          <b>Data Source</b><br>
+          Yahoo Finance · 15-minute delay<br><br>
+          <b>Refresh Interval</b><br>
           {cfg.CACHE_TTL_SECONDS // 60} minutes<br><br>
-          <b style="color:#8B949E;">Benchmark</b><br>
+          <b>Benchmark</b><br>
           {cfg.BENCHMARK_DISPLAY}
         </div>
         """, unsafe_allow_html=True)
 
-    return {"period": period, "ret_period": ret_period, "chart_ticker": chart_ticker, "send_now": send_now}
+    return {"period": period, "ret_period": ret_period,
+            "chart_ticker": chart_ticker, "send_now": send_now}
+
+
+# ── [7] FOOTER ────────────────────────────────────────────────
+
+def render_footer():
+    st.markdown("""
+    <div class="cm-footer">
+      <p class="cm-footer-mark">Collective Mining Ltd.</p>
+      <p class="cm-footer-copy">
+        Executive Intelligence Dashboard · Nasdaq &amp; TSX: CNL<br>
+        Data: Yahoo Finance, 15-minute delay · Automated alerts dispatched to
+        Microsoft Teams and email<br>
+        Internal use only — prepared for the C-Level and the CIBC Global Mining Group.
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ── MAIN APP ──────────────────────────────────────────────────
 
 def main():
-    controls = render_sidebar()
-    period      = controls["period"]
-    ret_period  = controls["ret_period"]
+    controls     = render_sidebar()
+    period       = controls["period"]
+    ret_period   = controls["ret_period"]
     chart_ticker = controls["chart_ticker"]
 
     # Load data
@@ -559,11 +457,10 @@ def main():
     if controls.get("send_now"):
         from src.alerts import dispatch_alerts
         results = dispatch_alerts(alerts, metrics, force=True)
-        ok = all(results.values())
-        if ok:
-            st.toast("✅ Alerts dispatched successfully!", icon="📧")
+        if all(results.values()):
+            st.toast("Alerts dispatched.")
         else:
-            st.toast("⚠️ Some channels failed. Check logs.", icon="⚠️")
+            st.toast("Some channels failed. Check the logs.")
 
     render_header()
     render_cnl_scorecard(metrics, histories, quotes)
@@ -571,67 +468,79 @@ def main():
     st.markdown("---")
     render_peer_table(metrics, period=ret_period)
 
-    # ── Charts section ────────────────────────────────────────
+    # ── Price performance ─────────────────────────────────────
     st.markdown("---")
-    st.markdown('<p class="section-header">📈 Price Performance</p>', unsafe_allow_html=True)
+    st.markdown(
+        theme.section_heading(
+            eyebrow="Relative Performance",
+            title="Price Performance",
+            note=f"All tickers rebased to 100 at the start of the selected period ({period.upper()}).",
+        ),
+        unsafe_allow_html=True,
+    )
 
-    # Normalized Performance
     if not normalized.empty:
         fig_norm = chart_normalized_performance(
             normalized,
             title=f"Relative Performance — Base 100 ({period.upper()})",
         )
-        st.plotly_chart(fig_norm, width='stretch', config={"displayModeBar": True})
+        st.plotly_chart(fig_norm, width="stretch", config={"displayModeBar": True})
 
-    # Candlestick
+    # ── Deep dive ─────────────────────────────────────────────
     st.markdown("---")
-    st.markdown(f'<p class="section-header">🕯️ {cfg.TICKER_MAP.get(chart_ticker, type("", (), {"name": chart_ticker})()).name} — Deep Dive</p>',
-                unsafe_allow_html=True)
+    deep_dive_name = cfg.TICKER_MAP[chart_ticker].name if chart_ticker in cfg.TICKER_MAP else chart_ticker
+    st.markdown(
+        theme.section_heading(
+            eyebrow="Deep Dive",
+            title=deep_dive_name,
+            note=f"Candlestick with MA{cfg.MA_SHORT}/{cfg.MA_MEDIUM}/{cfg.MA_LONG}, "
+                 f"volume, RSI({cfg.RSI_PERIOD}) and Bollinger Bands "
+                 f"({cfg.BB_PERIOD}, {cfg.BB_STD}).",
+        ),
+        unsafe_allow_html=True,
+    )
 
     df_chart = histories.get(chart_ticker)
     if df_chart is not None and not df_chart.empty:
         col_candle, col_rsi = st.columns([3, 1])
         with col_candle:
-            fig_candle = chart_candlestick(df_chart, chart_ticker)
-            st.plotly_chart(fig_candle, width='stretch', config={"displayModeBar": True})
+            st.plotly_chart(chart_candlestick(df_chart, chart_ticker),
+                            width="stretch", config={"displayModeBar": True})
         with col_rsi:
-            fig_rsi = chart_rsi(df_chart, chart_ticker)
-            st.plotly_chart(fig_rsi, width='stretch', config={"displayModeBar": False})
+            st.plotly_chart(chart_rsi(df_chart, chart_ticker),
+                            width="stretch", config={"displayModeBar": False})
 
-        # Bollinger Bands
-        fig_bb = chart_bollinger_bands(df_chart, chart_ticker)
-        st.plotly_chart(fig_bb, width='stretch', config={"displayModeBar": True})
+        st.plotly_chart(chart_bollinger_bands(df_chart, chart_ticker),
+                        width="stretch", config={"displayModeBar": True})
     else:
         st.warning(f"No chart data available for {chart_ticker}.")
 
-    # ── Volume & Returns ──────────────────────────────────────
+    # ── Volume & returns ──────────────────────────────────────
     st.markdown("---")
     col_vol, col_ret = st.columns(2)
 
     with col_vol:
-        st.markdown('<p class="section-header">📊 Relative Volume</p>', unsafe_allow_html=True)
-        fig_vol = chart_relative_volume(metrics)
-        st.plotly_chart(fig_vol, width='stretch', config={"displayModeBar": False})
+        st.markdown(
+            theme.section_heading(eyebrow="Liquidity", title="Relative Volume"),
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(chart_relative_volume(metrics),
+                        width="stretch", config={"displayModeBar": False})
 
     with col_ret:
-        st.markdown(f'<p class="section-header">💹 Returns — {ret_period.upper()}</p>', unsafe_allow_html=True)
-        fig_ret = chart_returns_comparison(metrics, period=ret_period)
-        st.plotly_chart(fig_ret, width='stretch', config={"displayModeBar": False})
+        st.markdown(
+            theme.section_heading(eyebrow="Performance", title=f"Returns — {ret_period.upper()}"),
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(chart_returns_comparison(metrics, period=ret_period),
+                        width="stretch", config={"displayModeBar": False})
 
     # ── Alerts ────────────────────────────────────────────────
     st.markdown("---")
     render_alerts_panel(alerts)
 
     # ── Footer ────────────────────────────────────────────────
-    st.markdown("""
-    <div style="margin-top:48px;padding:16px;text-align:center;border-top:1px solid #21262D;">
-      <p style="color:#484F58;font-size:11px;margin:0;">
-        Collective Mining Ltd. · Executive Intelligence Dashboard ·
-        Data: Yahoo Finance (15-min delay) · Automated alerts: Microsoft Teams + Email ·
-        For internal use only — CIBC Global Mining Group
-      </p>
-    </div>
-    """, unsafe_allow_html=True)
+    render_footer()
 
 
 if __name__ == "__main__":
