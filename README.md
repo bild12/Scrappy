@@ -30,7 +30,12 @@ Scrappy/
 ├── requirements.txt
 ├── .env.example                    ← Copy to .env and fill credentials
 │
+├── assets/
+│   ├── logo-horizontal.png         ← Official CM lockup (top bar)
+│   └── favicon.png                 ← CM mark (browser tab)
+│
 ├── src/
+│   ├── theme.py                    ← Collective Mining Design System (visual layer)
 │   ├── data_fetcher.py             ← yfinance ingestion, quotes, normalized returns
 │   ├── metrics.py                  ← RSI, Beta, BB, VWAP, S/R, alert detection
 │   ├── charts.py                   ← All Plotly chart components
@@ -45,8 +50,38 @@ Scrappy/
 │   └── eod_report.yml              ← 4:30 PM EST — end-of-day report
 │
 └── .streamlit/
-    └── config.toml                 ← Dark gold theme
+    └── config.toml                 ← Collective Mining light theme
 ```
+
+---
+
+## 🎨 Design System
+
+The whole visual layer follows the **Collective Mining Design System**. Data ingestion,
+metrics and alert dispatch are untouched by it — everything visual lives in
+[`src/theme.py`](src/theme.py) plus the token aliases at the bottom of `config.py`.
+
+| Token | Value | Where it appears |
+|---|---|---|
+| `--cyan-500` | `#20A7C9` | The single accent: 3px card top edges, eyebrows, CNL series, primary buttons |
+| `--navy-800` | `#0E2943` | Dark ground: sidebar, table header rows, footer band |
+| `--neutral-800` | `#333333` | Heading ink |
+| `--border-subtle` | `#E1E5E9` | Card rules, chart grid, table rows |
+| `--status-success` / `--status-danger` | `#2E7D51` / `#B3341F` | Up/down moves, candlesticks |
+| Commodity accents | gold `#C9A227`, silver `#A8B0B8`, copper `#B4703C`, tungsten `#5C6B73` | Peer series and ticker tags |
+
+House rules carried over from the design system:
+
+- **Montserrat** everywhere, numerals set with tabular figures; headings and CTAs are UPPERCASE.
+- **Hard-edged**: 3px radius on cards, inputs and buttons; 2px on tags; 0 on bands.
+- Cards are defined by a **1px rule plus a 3px cyan top edge**, never by elevation.
+  Navy-tinted shadows appear on hover only.
+- **No emoji** on any company-facing surface — the dashboard, the HTML email and the
+  Teams card use typographic marks (`▲ ▼ · ×`) and coloured rules instead.
+  (GitHub Actions step names and `scripts/run_alerts.py` console output still use emoji;
+  those are CI logs, not brand surfaces.)
+- Responsive by CSS: 6 KPI cards → 3-up under 1024px → 2-up under 768px → stacked under 480px.
+  The peer table scrolls inside its own container so the page never scrolls sideways.
 
 ---
 
@@ -123,12 +158,12 @@ To enable automated alerts with zero infrastructure:
 
 | Company | Ticker (yfinance) | Exchange | Color |
 |---|---|---|---|
-| ⭐ **Collective Mining Ltd.** | `CNL.TO` | TSX | 🟡 Gold |
-| Faraday Copper Corp. | `FDY.TO` | TSX | 🔵 Blue |
-| Marimaca Copper Corp. | `MARI.TO` | TSX | 🟢 Teal |
-| Lumina Metals Corp. | `LMCU.TO` | TSX | 🟠 Orange |
-| NorthIsle Copper and Gold | `NCX.V` | TSX-V | 🟣 Purple |
-| Osisko Metals Inc. | `OM.TO` | TSX | 🩷 Magenta |
+| ⭐ **Collective Mining Ltd.** | `CNL.TO` | TSX | Cyan `#20A7C9` (brand accent) |
+| Faraday Copper Corp. | `FDY.TO` | TSX | Copper `#B4703C` |
+| Marimaca Copper Corp. | `MARI.TO` | TSX | Navy `#1E5A80` |
+| Lumina Metals Corp. | `LMCU.TO` | TSX | Gold `#C9A227` |
+| NorthIsle Copper and Gold | `NCX.V` | TSX-V | Tungsten `#5C6B73` |
+| Osisko Metals Inc. | `OM.TO` | TSX | Silver `#A8B0B8` |
 
 **Benchmark**: `XEG.TO` (iShares S&P/TSX Capped Energy — used for Beta calculation)
 

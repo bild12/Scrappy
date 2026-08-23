@@ -6,6 +6,10 @@ src/charts.py
 All Plotly chart components used by the Streamlit dashboard.
 Each function returns a go.Figure ready to pass to st.plotly_chart().
 
+Styling follows the Collective Mining Design System: white ground,
+Montserrat, --border-subtle grid, cyan #20A7C9 as the single accent,
+muted status colours for up/down. Chart logic is untouched.
+
 Charts:
   1. Normalized price performance (base 100, all tickers)
   2. CNL candlestick with volume bars
@@ -33,9 +37,15 @@ from src.metrics import add_moving_averages, compute_rsi, compute_bollinger_band
 
 # ── SHARED LAYOUT DEFAULTS ────────────────────────────────────
 
+def _title(text: str, size: int = 13) -> dict:
+    """CM headings are always uppercase, set in heading ink."""
+    return dict(text=text.upper(), font=dict(size=size, color=cfg.CHART_TITLE_COLOR,
+                                             family=cfg.CHART_FONT_FAMILY), x=0.01)
+
+
 def _base_layout(**kwargs) -> dict:
     """
-    Common dark-theme layout overrides.
+    Common Collective Mining layout overrides (white ground, cyan accent).
     Uses flat underscore notation (xaxis_gridcolor, yaxis_showgrid…) so
     callers can still pass xaxis=dict(…) or yaxis=dict(…) without a
     duplicate-keyword TypeError.  kwargs safely override any default.
@@ -43,7 +53,7 @@ def _base_layout(**kwargs) -> dict:
     base = dict(
         paper_bgcolor=cfg.CHART_PAPER_COLOR,
         plot_bgcolor =cfg.CHART_BG_COLOR,
-        font=dict(family="Inter, 'Segoe UI', sans-serif", color=cfg.CHART_FONT_COLOR, size=12),
+        font=dict(family=cfg.CHART_FONT_FAMILY, color=cfg.CHART_FONT_COLOR, size=12),
         # Axis grid — flat notation avoids conflicts with explicit xaxis=/yaxis= kwargs
         xaxis_gridcolor=cfg.CHART_GRID_COLOR,
         xaxis_showgrid=True,
@@ -54,10 +64,15 @@ def _base_layout(**kwargs) -> dict:
         yaxis_zeroline=False,
         yaxis_showline=False,
         legend=dict(
-            bgcolor="rgba(0,0,0,0.4)",
+            bgcolor="rgba(255,255,255,0.92)",
             bordercolor=cfg.CHART_GRID_COLOR,
             borderwidth=1,
-            font=dict(size=11),
+            font=dict(size=11, color=cfg.CHART_FONT_COLOR),
+        ),
+        hoverlabel=dict(
+            bgcolor=cfg.CHART_PAPER_COLOR,
+            bordercolor=cfg.CHART_GRID_COLOR,
+            font=dict(family=cfg.CHART_FONT_FAMILY, color=cfg.CHART_FONT_COLOR, size=11),
         ),
         margin=dict(l=50, r=20, t=50, b=40),
         hovermode="x unified",
@@ -107,7 +122,7 @@ def chart_normalized_performance(
     )
 
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15, color=cfg.CHART_FONT_COLOR), x=0.02),
+        title=_title(title, size=14),
         **_base_layout(),
     )
     return fig
@@ -157,9 +172,9 @@ def chart_candlestick(
     # Moving Averages
     if show_ma:
         ma_configs = [
-            (f"MA{cfg.MA_SHORT}",  "#FFFFFF",  1.2, "dot"),
-            (f"MA{cfg.MA_MEDIUM}", "#90CAF9",  1.4, "solid"),
-            (f"MA{cfg.MA_LONG}",   "#FFD700",  2.0, "solid"),
+            (f"MA{cfg.MA_SHORT}",  cfg.CHART_NEUTRAL,     1.2, "dot"),
+            (f"MA{cfg.MA_MEDIUM}", cfg.CHART_ACCENT_DEEP, 1.4, "solid"),
+            (f"MA{cfg.MA_LONG}",   cfg.CHART_ACCENT,      2.0, "solid"),
         ]
         for col_name, color, width, dash in ma_configs:
             if col_name in df_ma.columns:
@@ -188,7 +203,7 @@ def chart_candlestick(
         ), row=2, col=1)
 
     fig.update_layout(
-        title=dict(text=f"{name} — Price & Volume", font=dict(size=15, color=cfg.CHART_FONT_COLOR), x=0.02),
+        title=_title(f"{name} — Price & Volume", size=14),
         xaxis_rangeslider_visible=False,
         **_base_layout(),
     )
@@ -237,7 +252,7 @@ def chart_rsi(df: pd.DataFrame, ticker: str) -> go.Figure:
     fig.add_hline(y=50, line_dash="dot", line_color=cfg.CHART_NEUTRAL, line_width=1)
 
     fig.update_layout(
-        title=dict(text=f"{name} — RSI ({cfg.RSI_PERIOD})", font=dict(size=13, color=cfg.CHART_FONT_COLOR), x=0.02),
+        title=_title(f"{name} — RSI ({cfg.RSI_PERIOD})"),
         yaxis=dict(range=[0, 100], dtick=10, gridcolor=cfg.CHART_GRID_COLOR),
         **_base_layout(),
     )
@@ -260,15 +275,15 @@ def chart_bollinger_bands(df: pd.DataFrame, ticker: str) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=bb_df.index, y=bb_df["BB_Upper"].round(4),
         name="BB Upper", mode="lines",
-        line=dict(color="rgba(144,202,249,0.4)", width=1),
+        line=dict(color="rgba(30,90,128,0.35)", width=1),
         hovertemplate="BB Upper: %{y:.4f}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
         x=bb_df.index, y=bb_df["BB_Lower"].round(4),
         name="BB Lower", mode="lines",
-        line=dict(color="rgba(144,202,249,0.4)", width=1),
+        line=dict(color="rgba(30,90,128,0.35)", width=1),
         fill="tonexty",
-        fillcolor="rgba(144,202,249,0.05)",
+        fillcolor="rgba(30,90,128,0.06)",
         hovertemplate="BB Lower: %{y:.4f}<extra></extra>",
     ))
 
@@ -276,7 +291,7 @@ def chart_bollinger_bands(df: pd.DataFrame, ticker: str) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=bb_df.index, y=bb_df["BB_Mid"].round(4),
         name="BB Mid (SMA)", mode="lines",
-        line=dict(color="#90CAF9", width=1.2, dash="dot"),
+        line=dict(color=cfg.CHART_ACCENT_DEEP, width=1.2, dash="dot"),
         hovertemplate="BB Mid: %{y:.4f}<extra></extra>",
     ))
 
@@ -290,8 +305,7 @@ def chart_bollinger_bands(df: pd.DataFrame, ticker: str) -> go.Figure:
     ))
 
     fig.update_layout(
-        title=dict(text=f"{name} — Bollinger Bands ({cfg.BB_PERIOD},{cfg.BB_STD})",
-                   font=dict(size=13, color=cfg.CHART_FONT_COLOR), x=0.02),
+        title=_title(f"{name} — Bollinger Bands ({cfg.BB_PERIOD},{cfg.BB_STD})"),
         **_base_layout(),
     )
     return fig
@@ -342,7 +356,7 @@ def chart_relative_volume(metrics: Dict[str, Dict]) -> go.Figure:
     fig.add_vline(x=1.0, line_dash="dot", line_color=cfg.CHART_NEUTRAL, line_width=1)
 
     fig.update_layout(
-        title=dict(text=f"Relative Volume vs 20-Day Average", font=dict(size=13, color=cfg.CHART_FONT_COLOR), x=0.02),
+        title=_title("Relative Volume vs 20-Day Average"),
         xaxis_title="Relative Volume (×)",
         **_base_layout(hovermode="y unified"),
     )
@@ -396,7 +410,7 @@ def chart_returns_comparison(
 
     label = period_labels.get(period, period.upper())
     fig.update_layout(
-        title=dict(text=f"Returns — {label}", font=dict(size=13, color=cfg.CHART_FONT_COLOR), x=0.02),
+        title=_title(f"Returns — {label}"),
         xaxis_title="Return (%)",
         **_base_layout(hovermode="y unified"),
     )
@@ -418,7 +432,7 @@ def chart_sparkline(df: pd.DataFrame, company: object, days: int = 30) -> go.Fig
         mode="lines",
         line=dict(color=color, width=2),
         fill="tozeroy",
-        fillcolor=f"rgba({_hex_to_rgb(color)}, 0.12)",
+        fillcolor=f"rgba({_hex_to_rgb(color)}, 0.10)",
         hoverinfo="skip",
     ))
     fig.update_layout(

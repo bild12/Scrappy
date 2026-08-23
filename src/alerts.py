@@ -86,9 +86,9 @@ def build_teams_card(alerts: List[Dict], metrics: Dict[str, Dict]) -> Dict:
     # Build alert fact rows
     alert_facts = []
     for a in alerts[:10]:   # max 10 alerts per card
-        icon = {"critical": "🔴", "warning": "🟡", "info": "🔵"}.get(a["severity"], "⚪")
+        severity = a["severity"].upper()
         alert_facts.append({
-            "title": f"{icon} {a['display']}",
+            "title": f"{a['display']} · {severity}",
             "value": a["message"],
         })
 
@@ -96,10 +96,10 @@ def build_teams_card(alerts: List[Dict], metrics: Dict[str, Dict]) -> Dict:
         # Title
         {
             "type": "TextBlock",
-            "text": "⛏️ Collective Mining — Market Intelligence Alert",
+            "text": "COLLECTIVE MINING — MARKET INTELLIGENCE ALERT",
             "size": "Large",
             "weight": "Bolder",
-            "color": "Warning",
+            "color": "Accent",
             "wrap": True,
         },
         {
@@ -113,9 +113,9 @@ def build_teams_card(alerts: List[Dict], metrics: Dict[str, Dict]) -> Dict:
         # CNL snapshot
         {
             "type": "TextBlock",
-            "text": f"CNL (TSX) Snapshot",
+            "text": "CNL (TSX) SNAPSHOT",
             "weight": "Bolder",
-            "color": "Warning",
+            "color": "Accent",
             "spacing": "Medium",
         },
         {
@@ -138,7 +138,7 @@ def build_teams_card(alerts: List[Dict], metrics: Dict[str, Dict]) -> Dict:
             {"type": "Separator"},
             {
                 "type": "TextBlock",
-                "text": f"🚨 {len(alerts)} Alert(s) Triggered",
+                "text": f"{len(alerts)} ALERT(S) TRIGGERED",
                 "weight": "Bolder",
                 "color": "Attention" if any(a["severity"] == "critical" for a in alerts) else "Warning",
                 "spacing": "Medium",
@@ -151,7 +151,7 @@ def build_teams_card(alerts: List[Dict], metrics: Dict[str, Dict]) -> Dict:
     else:
         card_body.append({
             "type": "TextBlock",
-            "text": "✅ No alerts triggered — all thresholds within normal range.",
+            "text": "No alerts triggered — all thresholds within normal range.",
             "color": "Good",
             "spacing": "Medium",
         })
@@ -160,7 +160,7 @@ def build_teams_card(alerts: List[Dict], metrics: Dict[str, Dict]) -> Dict:
     card_body.append({"type": "Separator"})
     card_body.append({
         "type": "TextBlock",
-        "text": "Peer Performance",
+        "text": "PEER PERFORMANCE",
         "weight": "Bolder",
         "spacing": "Medium",
     })
@@ -172,11 +172,11 @@ def build_teams_card(alerts: List[Dict], metrics: Dict[str, Dict]) -> Dict:
         p   = m.get("price", None)
         chg_str_peer = f"{chg:+.2f}%" if chg is not None else "—"
         p_str        = f"${p:.3f}"    if p  is not None else "—"
-        star = "⭐ " if company.is_target else ""
         card_body.append({
             "type": "TextBlock",
-            "text": f"{star}{company.short_name} ({company.ticker_display})  •  {p_str}  •  {chg_str_peer}",
+            "text": f"{company.short_name} ({company.ticker_display})  ·  {p_str}  ·  {chg_str_peer}",
             "size": "Small",
+            "weight": "Bolder" if company.is_target else "Default",
             "wrap": False,
             "spacing": "None",
         })
@@ -244,128 +244,158 @@ def build_html_email(alerts: List[Dict], metrics: Dict[str, Dict]) -> str:
     vol     = (target_m.get("volume") or {}).get("vol_today", 0)
     rel_vol = (target_m.get("volume") or {}).get("rel_vol_20d", 0)
 
-    chg_color = "#00C853" if chg_pct >= 0 else "#FF1744"
-    chg_str   = f"{'▲' if chg_pct >= 0 else '▼'} {abs(chg_pct):.2f}%"
+    # ── Collective Mining Design System tokens (inline — email clients
+    #    strip <style>, so every value is written out on the element).
+    CM_CYAN    = "#20A7C9"   # --cyan-500 · the single accent
+    CM_CYAN_D  = "#146D84"   # --cyan-700
+    CM_NAVY    = "#0E2943"   # --navy-800 · dark ground
+    INK        = "#333333"   # --text-heading
+    BODY       = "#4A4A4A"   # --text-body
+    MUTED      = "#666666"   # --text-muted
+    FAINT      = "#9AA3AC"   # --text-faint
+    LINE       = "#E1E5E9"   # --border-subtle
+    ZEBRA      = "#F7F8F9"   # --neutral-50
+    HILITE     = "#E4F5F9"   # --cyan-100 · the CNL row
+    OK         = "#2E7D51"   # --status-success
+    WARN       = "#C97B20"   # --status-warning
+    BAD        = "#B3341F"   # --status-danger
+    # Montserrat is the brand face; Arial is the mandated fallback for
+    # correspondence and the only face email clients reliably have.
+    FONT       = "'Montserrat',Arial,Helvetica,sans-serif"
 
-    # Alerts rows
+    LABEL = (f"color:{MUTED};font-size:10px;font-weight:700;"
+             "text-transform:uppercase;letter-spacing:1.8px;")
+    CELL  = f"padding:12px 16px;border-bottom:1px solid {LINE};"
+    HEAD  = (f"padding:10px 16px;background:{CM_NAVY};color:#FFFFFF;font-size:10px;"
+             "font-weight:700;text-transform:uppercase;letter-spacing:1.8px;")
+
+    chg_color = OK if chg_pct >= 0 else BAD
+    chg_str   = f"{'▲' if chg_pct >= 0 else '▼'} {abs(chg_pct):.2f}%"
+    ytd_color = OK if (ret_ytd or 0) >= 0 else BAD
+
+    def _eyebrow(text: str) -> str:
+        """The CM section device: a 40x3 cyan rule above a tracked label."""
+        return (
+            f'<div style="width:40px;height:3px;background:{CM_CYAN};'
+            'font-size:0;line-height:0;margin:0 0 10px;">&nbsp;</div>'
+            f'<div style="color:{CM_CYAN_D};font-size:11px;font-weight:700;'
+            f'text-transform:uppercase;letter-spacing:2.1px;margin:0 0 12px;">{text}</div>'
+        )
+
+    # ── Alert rows ───────────────────────────────────────────
+    sev_colors = {"critical": BAD, "warning": WARN, "info": CM_CYAN}
     alert_rows_html = ""
     if alerts:
         for a in alerts:
-            sev_colors = {"critical": "#FF1744", "warning": "#FFD600", "info": "#00B4D8"}
-            dot_color  = sev_colors.get(a["severity"], "#8B949E")
+            rule = sev_colors.get(a["severity"], FAINT)
             alert_rows_html += f"""
             <tr>
-              <td style="padding:6px 12px;border-bottom:1px solid #21262D;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;
-                             background:{dot_color};margin-right:8px;"></span>
-                <b style="color:#E6EDF3;">{a['display']}</b>
-              </td>
-              <td style="padding:6px 12px;border-bottom:1px solid #21262D;color:#C9D1D9;">{a['message']}</td>
+              <td style="{CELL}border-left:3px solid {rule};color:{INK};font-weight:700;
+                         white-space:nowrap;">{a['display']}</td>
+              <td style="{CELL}color:{BODY};">{a['message']}</td>
             </tr>"""
     else:
-        alert_rows_html = """
-        <tr><td colspan="2" style="padding:12px;text-align:center;color:#00C853;">
-          ✅ No alerts triggered — all thresholds within normal range.
+        alert_rows_html = f"""
+        <tr><td colspan="2" style="{CELL}border-left:3px solid {OK};color:{BODY};">
+          No alerts triggered — all thresholds within normal range.
         </td></tr>"""
 
-    # Peer table rows
+    # ── Peer rows ────────────────────────────────────────────
     peer_rows_html = ""
-    for company in cfg.COMPANIES:
-        tk  = company.ticker_primary
-        m   = metrics.get(tk, {})
+    for idx, company in enumerate(cfg.COMPANIES):
+        m   = metrics.get(company.ticker_primary, {})
         chg = m.get("change_1d_pct", None)
-        p   = m.get("price", None)
+        pr  = m.get("price", None)
         ret = (m.get("returns") or {}).get("ytd", None)
-        c_color   = "#00C853" if (chg or 0) >= 0 else "#FF1744"
-        row_bg    = "#1C2128" if company.is_target else "#161B22"
-        star      = "⭐ " if company.is_target else ""
+
+        row_bg  = HILITE if company.is_target else (ZEBRA if idx % 2 else "#FFFFFF")
+        weight  = "700" if company.is_target else "400"
+        chg_col = FAINT if chg is None else (OK if chg >= 0 else BAD)
+        ret_col = FAINT if ret is None else (OK if ret >= 0 else BAD)
+        chg_txt = "—" if chg is None else f"{'▲' if chg >= 0 else '▼'} {abs(chg):.2f}%"
+        ret_txt = "—" if ret is None else f"{ret:+.1f}%"
+        pr_txt  = "—" if pr  is None else f"${pr:.3f}"
+
         peer_rows_html += f"""
         <tr style="background:{row_bg};">
-          <td style="padding:8px 12px;border-bottom:1px solid #21262D;color:{company.color};font-weight:bold;">
-            {star}{company.ticker_display}
+          <td style="{CELL}color:{company.color};font-weight:700;white-space:nowrap;">
+            {company.ticker_display}
           </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #21262D;color:#E6EDF3;">
-            {company.short_name}
-          </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #21262D;color:#E6EDF3;text-align:right;">
-            {"${:.3f}".format(p) if p is not None else "—"}
-          </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #21262D;color:{c_color};text-align:right;font-weight:bold;">
-            {"▲" if (chg or 0) >= 0 else "▼"} {abs(chg):.2f}% if chg is not None else "—"
-          </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #21262D;color:{c_color};text-align:right;">
-            {"{:+.1f}%".format(ret) if ret is not None else "—"}
-          </td>
+          <td style="{CELL}color:{INK};font-weight:{weight};">{company.short_name}</td>
+          <td style="{CELL}color:{INK};text-align:right;font-weight:{weight};">{pr_txt}</td>
+          <td style="{CELL}color:{chg_col};text-align:right;font-weight:700;">{chg_txt}</td>
+          <td style="{CELL}color:{ret_col};text-align:right;">{ret_txt}</td>
         </tr>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CNL Market Intelligence Alert</title></head>
-<body style="margin:0;padding:0;background:#0D1117;font-family:'Segoe UI',Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0D1117;padding:24px 0;">
+<title>Collective Mining — Market Intelligence Alert</title></head>
+<body style="margin:0;padding:0;background:{ZEBRA};font-family:{FONT};">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:{ZEBRA};padding:24px 0;">
   <tr><td align="center">
-    <table width="680" cellpadding="0" cellspacing="0" style="background:#161B22;border-radius:12px;
-           border:1px solid #21262D;overflow:hidden;max-width:100%;">
+    <table width="680" cellpadding="0" cellspacing="0" style="background:#FFFFFF;
+           border:1px solid {LINE};border-radius:3px;overflow:hidden;max-width:100%;">
 
-      <!-- Header -->
+      <!-- Header — navy ground, cyan rule -->
       <tr>
-        <td style="background:linear-gradient(135deg,#1C2128 0%,#0D1117 100%);
-                   padding:28px 32px;border-bottom:2px solid #FFD700;">
-          <h1 style="margin:0;color:#FFD700;font-size:20px;font-weight:700;letter-spacing:0.5px;">
-            ⛏️ Collective Mining Ltd.
+        <td style="background:{CM_NAVY};padding:28px 32px;border-bottom:3px solid {CM_CYAN};">
+          <div style="color:#7FD0E2;font-size:11px;font-weight:700;text-transform:uppercase;
+                      letter-spacing:2.1px;margin:0 0 8px;">Nasdaq &amp; TSX: CNL</div>
+          <h1 style="margin:0;color:#FFFFFF;font-size:20px;font-weight:700;
+                     text-transform:uppercase;letter-spacing:-0.2px;">
+            Collective Mining Ltd.
           </h1>
-          <p style="margin:4px 0 0;color:#8B949E;font-size:13px;">
+          <p style="margin:6px 0 0;color:rgba(255,255,255,.72);font-size:12px;">
             Market Intelligence Alert  ·  {_now_est()}
           </p>
         </td>
       </tr>
 
-      <!-- CNL KPI Bar -->
+      <!-- CNL KPI bar -->
       <tr>
-        <td style="padding:24px 32px;background:#1C2128;">
+        <td style="padding:24px 24px 8px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td style="text-align:center;padding:12px;">
-                <div style="color:#8B949E;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Price</div>
-                <div style="color:#E6EDF3;font-size:24px;font-weight:700;margin-top:4px;">${price:.3f}</div>
-                <div style="color:#8B949E;font-size:11px;">CAD</div>
+                <div style="{LABEL}">Price</div>
+                <div style="color:{INK};font-size:24px;font-weight:700;margin-top:6px;">${price:.3f}</div>
+                <div style="color:{MUTED};font-size:11px;margin-top:2px;">CAD</div>
               </td>
-              <td style="text-align:center;padding:12px;border-left:1px solid #21262D;">
-                <div style="color:#8B949E;font-size:11px;text-transform:uppercase;letter-spacing:1px;">1D Change</div>
-                <div style="color:{chg_color};font-size:24px;font-weight:700;margin-top:4px;">{chg_str}</div>
-                <div style="color:#8B949E;font-size:11px;">vs. Yesterday</div>
+              <td style="text-align:center;padding:12px;border-left:1px solid {LINE};">
+                <div style="{LABEL}">1D Change</div>
+                <div style="color:{chg_color};font-size:24px;font-weight:700;margin-top:6px;">{chg_str}</div>
+                <div style="color:{MUTED};font-size:11px;margin-top:2px;">vs. previous close</div>
               </td>
-              <td style="text-align:center;padding:12px;border-left:1px solid #21262D;">
-                <div style="color:#8B949E;font-size:11px;text-transform:uppercase;letter-spacing:1px;">YTD Return</div>
-                <div style="color:{"#00C853" if (ret_ytd or 0) >= 0 else "#FF1744"};font-size:24px;font-weight:700;margin-top:4px;">
+              <td style="text-align:center;padding:12px;border-left:1px solid {LINE};">
+                <div style="{LABEL}">YTD Return</div>
+                <div style="color:{ytd_color};font-size:24px;font-weight:700;margin-top:6px;">
                   {"{:+.1f}%".format(ret_ytd) if ret_ytd is not None else "—"}
                 </div>
-                <div style="color:#8B949E;font-size:11px;">Year-to-Date</div>
+                <div style="color:{MUTED};font-size:11px;margin-top:2px;">Year-to-date</div>
               </td>
-              <td style="text-align:center;padding:12px;border-left:1px solid #21262D;">
-                <div style="color:#8B949E;font-size:11px;text-transform:uppercase;letter-spacing:1px;">RSI ({cfg.RSI_PERIOD}d)</div>
-                <div style="color:#FFD700;font-size:24px;font-weight:700;margin-top:4px;">{rsi}</div>
-                <div style="color:#8B949E;font-size:11px;">Beta: {beta}</div>
+              <td style="text-align:center;padding:12px;border-left:1px solid {LINE};">
+                <div style="{LABEL}">RSI ({cfg.RSI_PERIOD}d)</div>
+                <div style="color:{CM_CYAN_D};font-size:24px;font-weight:700;margin-top:6px;">{rsi}</div>
+                <div style="color:{MUTED};font-size:11px;margin-top:2px;">
+                  Beta {beta} · Vol {_format_volume(vol)} ({rel_vol:.1f}×)
+                </div>
               </td>
             </tr>
           </table>
         </td>
       </tr>
 
-      <!-- Alerts Table -->
+      <!-- Alerts -->
       <tr>
-        <td style="padding:0 32px 24px;">
-          <h2 style="margin:20px 0 12px;color:#E6EDF3;font-size:14px;font-weight:600;
-                     text-transform:uppercase;letter-spacing:1px;">
-            🚨 Triggered Alerts
-          </h2>
+        <td style="padding:16px 32px 8px;">
+          {_eyebrow("Signals")}
           <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;
-                 border:1px solid #21262D;border-radius:8px;overflow:hidden;">
+                 border:1px solid {LINE};">
             <thead>
-              <tr style="background:#21262D;">
-                <th style="padding:8px 12px;text-align:left;color:#8B949E;font-size:12px;font-weight:600;">Ticker</th>
-                <th style="padding:8px 12px;text-align:left;color:#8B949E;font-size:12px;font-weight:600;">Signal</th>
+              <tr>
+                <th style="{HEAD}text-align:left;">Ticker</th>
+                <th style="{HEAD}text-align:left;">Signal</th>
               </tr>
             </thead>
             <tbody>{alert_rows_html}</tbody>
@@ -373,22 +403,19 @@ def build_html_email(alerts: List[Dict], metrics: Dict[str, Dict]) -> str:
         </td>
       </tr>
 
-      <!-- Peer Comparison Table -->
+      <!-- Peer comparison -->
       <tr>
-        <td style="padding:0 32px 32px;">
-          <h2 style="margin:0 0 12px;color:#E6EDF3;font-size:14px;font-weight:600;
-                     text-transform:uppercase;letter-spacing:1px;">
-            📊 Peer Performance
-          </h2>
+        <td style="padding:24px 32px 32px;">
+          {_eyebrow("Peer Set")}
           <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;
-                 border:1px solid #21262D;border-radius:8px;overflow:hidden;">
+                 border:1px solid {LINE};">
             <thead>
-              <tr style="background:#21262D;">
-                <th style="padding:8px 12px;text-align:left;color:#8B949E;font-size:12px;">Ticker</th>
-                <th style="padding:8px 12px;text-align:left;color:#8B949E;font-size:12px;">Company</th>
-                <th style="padding:8px 12px;text-align:right;color:#8B949E;font-size:12px;">Price</th>
-                <th style="padding:8px 12px;text-align:right;color:#8B949E;font-size:12px;">1D Chg</th>
-                <th style="padding:8px 12px;text-align:right;color:#8B949E;font-size:12px;">YTD</th>
+              <tr>
+                <th style="{HEAD}text-align:left;">Ticker</th>
+                <th style="{HEAD}text-align:left;">Company</th>
+                <th style="{HEAD}text-align:right;">Price</th>
+                <th style="{HEAD}text-align:right;">1D Chg</th>
+                <th style="{HEAD}text-align:right;">YTD</th>
               </tr>
             </thead>
             <tbody>{peer_rows_html}</tbody>
@@ -396,12 +423,12 @@ def build_html_email(alerts: List[Dict], metrics: Dict[str, Dict]) -> str:
         </td>
       </tr>
 
-      <!-- Footer -->
+      <!-- Footer — navy contact bar -->
       <tr>
-        <td style="background:#0D1117;padding:16px 32px;border-top:1px solid #21262D;">
-          <p style="margin:0;color:#484F58;font-size:11px;text-align:center;">
-            Collective Mining Ltd. · Executive Market Intelligence System ·
-            Data sourced from Yahoo Finance (15-min delay) ·
+        <td style="background:{CM_NAVY};padding:20px 32px;border-top:3px solid {CM_CYAN};">
+          <p style="margin:0;color:rgba(255,255,255,.72);font-size:11px;line-height:1.7;text-align:center;">
+            Collective Mining Ltd. · Executive Market Intelligence System<br>
+            Data sourced from Yahoo Finance, 15-minute delay ·
             This is an automated alert — do not reply to this email.
           </p>
         </td>
@@ -443,10 +470,10 @@ def send_email_alert(
 
     if subject is None:
         if n_alerts > 0:
-            prefix = "🔴 CRITICAL" if has_crit else "🟡 ALERT"
+            prefix = "CRITICAL" if has_crit else "ALERT"
             subject = f"{prefix} — CNL {chg_arrow}{abs(target_chg):.1f}% | {n_alerts} signal(s) | {_now_est()}"
         else:
-            subject = f"✅ CNL Daily Report | {chg_arrow}{abs(target_chg):.1f}% | {_now_est()}"
+            subject = f"CNL Daily Report | {chg_arrow}{abs(target_chg):.1f}% | {_now_est()}"
 
     html_body = build_html_email(alerts, metrics)
 

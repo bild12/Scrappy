@@ -46,11 +46,11 @@ def is_market_open() -> bool:
 def market_status_label() -> str:
     """Human-readable market status string."""
     if is_market_open():
-        return "🟢 TSX Open"
+        return "TSX Open"
     now = datetime.now()
     if now.weekday() >= 5:
-        return "🔴 Market Closed (Weekend)"
-    return "🔴 TSX Closed (After Hours)"
+        return "Market Closed (Weekend)"
+    return "TSX Closed (After Hours)"
 
 
 # ── SINGLE-TICKER FETCH ───────────────────────────────────────
