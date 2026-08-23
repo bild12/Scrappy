@@ -121,7 +121,7 @@ ALERT_EMAIL_TO=ceo@collectivemining.com,vp@collectivemining.com
 streamlit run app.py
 ```
 
-Open: **http://localhost:8501**
+Open: **http://localhost:8512/**
 
 ### 4. Test Alert Dispatch
 
