@@ -447,10 +447,12 @@ def build_html_email(alerts: List[Dict], metrics: Dict[str, Dict]) -> str:
 def send_email_alert(
     alerts: List[Dict],
     metrics: Dict[str, Dict],
+    recipient_email: Optional[str] = None,
     subject: Optional[str] = None,
+    period: str = "1d",
 ) -> bool:
     """
-    Send HTML email report via Resend API.
+    Send HTML email report via Resend API to recipient_email (or cfg.ALERT_EMAIL_TO).
     Returns True on success.
     Docs: https://resend.com/docs/api-reference/emails/send-email
     """
@@ -459,8 +461,9 @@ def send_email_alert(
         logger.warning("RESEND_API_KEY not set — skipping email notification.")
         return False
 
-    if not cfg.ALERT_EMAIL_TO:
-        logger.warning("ALERT_EMAIL_TO not configured — skipping email.")
+    to_emails = [recipient_email.strip()] if recipient_email else cfg.ALERT_EMAIL_TO
+    if not to_emails or not to_emails[0]:
+        logger.warning("No recipient email specified — skipping email.")
         return False
 
     n_alerts   = len(alerts)
@@ -469,17 +472,13 @@ def send_email_alert(
     chg_arrow  = "▲" if target_chg >= 0 else "▼"
 
     if subject is None:
-        if n_alerts > 0:
-            prefix = "CRITICAL" if has_crit else "ALERT"
-            subject = f"{prefix} — CNL {chg_arrow}{abs(target_chg):.1f}% | {n_alerts} signal(s) | {_now_est()}"
-        else:
-            subject = f"CNL Daily Report | {chg_arrow}{abs(target_chg):.1f}% | {_now_est()}"
+        subject = f"Executive Intelligence Dashboard Report | CNL {chg_arrow}{abs(target_chg):.1f}% | Period: {period.upper()} | {_now_est()}"
 
     html_body = build_html_email(alerts, metrics)
 
     payload = {
         "from":    cfg.ALERT_EMAIL_FROM,
-        "to":      cfg.ALERT_EMAIL_TO,
+        "to":      to_emails,
         "subject": subject,
         "html":    html_body,
     }

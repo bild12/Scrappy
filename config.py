@@ -16,64 +16,215 @@ from typing import Dict, List
 @dataclass
 class Company:
     name: str
-    short_name: str       # For chart labels (max 12 chars)
-    ticker_primary: str   # yfinance symbol
-    ticker_display: str   # Human-readable ticker shown in UI
+    short_name: str           # For chart labels (max 12 chars)
+    ticker_primary: str       # yfinance symbol
+    ticker_display: str       # Human-readable ticker shown in UI
     exchange: str
-    color: str            # Plotly-compatible hex color
+    color: str                # Plotly-compatible hex color
+    category: str = "Mid-Tier / Explorer" # "Target", "Mid-Tier / Explorer", "Major / Conglomerate"
+    relevance: str = ""       # Operational relevance / region / M&A relationship
+    tradingview_symbol: str = "" # e.g. "TSX:CNL"
+    secondary_tickers: List[str] = None
     is_target: bool = False
 
+    def __post_init__(self):
+        if self.secondary_tickers is None:
+            self.secondary_tickers = []
 
-# All companies monitored. CNL is always the star.
+
+# CNL Multi-Market Symbols
+CNL_MULTIMARKET_TICKERS = {
+    "TSX": {"symbol": "CNL.TO", "display": "CNL.TO (TSX Toronto)", "tv": "TSX:CNL", "currency": "CAD"},
+    "NYSE AMERICAN": {"symbol": "CNL", "display": "CNL (NYSE American USA)", "tv": "AMEX:CNL", "currency": "USD"},
+    "FRANKFURT": {"symbol": "GG1.F", "display": "GG1.F (Börse Frankfurt)", "tv": "FWB:GG1", "currency": "EUR"},
+}
+
+
+# All companies monitored (CNL + Group A Mid-Tiers & Regional + Group B Majors & Global)
 COMPANIES: List[Company] = [
+    # TARGET
     Company(
         name="Collective Mining Ltd.",
         short_name="Collective",
         ticker_primary="CNL.TO",
-        ticker_display="CNL (TSX)",
-        exchange="TSX",
-        color="#20A7C9",          # --cyan-500 · the brand accent
+        ticker_display="CNL (TSX / NYSE)",
+        exchange="TSX / NYSE",
+        color="#20A7C9",          # --cyan-500 · target accent
+        category="Target",
+        relevance="Guayabales & San Antonio (Caldas, Colombia)",
+        tradingview_symbol="TSX:CNL",
+        secondary_tickers=["CNL", "GG1.F"],
         is_target=True,
     ),
+    # GROUP A: MID-TIERS & ADVANCED EXPLORERS (COLOMBIA BASIN / REGIONAL)
     Company(
-        name="Faraday Copper Corp.",
-        short_name="Faraday",
-        ticker_primary="FDY.TO",
-        ticker_display="FDY (TSX)",
+        name="Aris Mining Corp.",
+        short_name="Aris Mining",
+        ticker_primary="ARIS.TO",
+        ticker_display="ARIS (TSX / NYSE)",
         exchange="TSX",
-        color="#B4703C",          # --commodity-copper
+        color="#E06D53",
+        category="Mid-Tier / Explorer",
+        relevance="Marmato (Caldas) y Segovia (Antioquia)",
+        tradingview_symbol="TSX:ARIS",
+        secondary_tickers=["ARIS"],
     ),
     Company(
-        name="Marimaca Copper Corp.",
-        short_name="Marimaca",
-        ticker_primary="MARI.TO",
-        ticker_display="MARI (TSX)",
+        name="Mineros S.A.",
+        short_name="Mineros",
+        ticker_primary="MSA.TO",
+        ticker_display="MSA (TSX / BVC)",
         exchange="TSX",
-        color="#1E5A80",          # --navy-500
+        color="#C9A227",
+        category="Mid-Tier / Explorer",
+        relevance="Bajo Cauca (Antioquia) y Latam",
+        tradingview_symbol="TSX:MSA",
     ),
     Company(
-        name="Lumina Metals Corp.",
-        short_name="Lumina",
-        ticker_primary="LMCU.TO",
-        ticker_display="LMCU (TSX)",
-        exchange="TSX",
-        color="#C9A227",          # --commodity-gold
-    ),
-    Company(
-        name="NorthIsle Copper and Gold",
-        short_name="NorthIsle",
-        ticker_primary="NCX.V",
-        ticker_display="NCX (TSX-V)",
+        name="Soma Gold Corp.",
+        short_name="Soma Gold",
+        ticker_primary="SOMA.V",
+        ticker_display="SOMA (TSX-V)",
         exchange="TSX-V",
-        color="#5C6B73",          # --commodity-tungsten
+        color="#2E7D51",
+        category="Mid-Tier / Explorer",
+        relevance="El Bagre (Antioquia)",
+        tradingview_symbol="TSXV:SOMA",
     ),
     Company(
-        name="Osisko Metals Inc.",
-        short_name="Osisko Met.",
-        ticker_primary="OM.TO",
-        ticker_display="OM (TSX)",
+        name="Atico Mining Corp.",
+        short_name="Atico Mining",
+        ticker_primary="ATY.V",
+        ticker_display="ATY (TSX-V)",
+        exchange="TSX-V",
+        color="#B4703C",
+        category="Mid-Tier / Explorer",
+        relevance="El Roble (Chocó, Cu-Au)",
+        tradingview_symbol="TSXV:ATY",
+    ),
+    Company(
+        name="Cordoba Minerals Corp.",
+        short_name="Cordoba Min.",
+        ticker_primary="CDB.V",
+        ticker_display="CDB (TSX-V)",
+        exchange="TSX-V",
+        color="#3B7A57",
+        category="Mid-Tier / Explorer",
+        relevance="San Matías / Alacrán (Córdoba)",
+        tradingview_symbol="TSXV:CDB",
+    ),
+    Company(
+        name="GoldMining Inc.",
+        short_name="GoldMining",
+        ticker_primary="GOLD.TO",
+        ticker_display="GOLD (TSX)",
         exchange="TSX",
-        color="#A8B0B8",          # --commodity-silver
+        color="#DAA520",
+        category="Mid-Tier / Explorer",
+        relevance="La Mina (Antioquia)",
+        tradingview_symbol="TSX:GOLD",
+    ),
+    Company(
+        name="Outcrop Silver & Gold",
+        short_name="Outcrop",
+        ticker_primary="OCG.V",
+        ticker_display="OCG (TSX-V)",
+        exchange="TSX-V",
+        color="#A8B0B8",
+        category="Mid-Tier / Explorer",
+        relevance="Santa Ana (Tolima, Ag-Au)",
+        tradingview_symbol="TSXV:OCG",
+    ),
+    Company(
+        name="Orosur Mining Inc.",
+        short_name="Orosur",
+        ticker_primary="OMI.V",
+        ticker_display="OMI (TSX-V)",
+        exchange="TSX-V",
+        color="#708090",
+        category="Mid-Tier / Explorer",
+        relevance="Anzá (Cauca Medio, Antioquia)",
+        tradingview_symbol="TSXV:OMI",
+    ),
+    Company(
+        name="Denarius Metals Corp.",
+        short_name="Denarius",
+        ticker_primary="DMET.V",
+        ticker_display="DMET (TSX-V)",
+        exchange="TSX-V",
+        color="#6A5ACD",
+        category="Mid-Tier / Explorer",
+        relevance="Zancudo y Titiribí (Antioquia)",
+        tradingview_symbol="TSXV:DMET",
+    ),
+    # GROUP B: MAJORS & GLOBAL CONGLOMERATES
+    Company(
+        name="Agnico Eagle Mines Ltd.",
+        short_name="Agnico Eagle",
+        ticker_primary="AEM",
+        ticker_display="AEM (NYSE / TSX)",
+        exchange="NYSE",
+        color="#1E5A80",
+        category="Major / Conglomerate",
+        relevance="Accionista estratégico ~15% en CNL",
+        tradingview_symbol="NYSE:AEM",
+        secondary_tickers=["AEM.TO"],
+    ),
+    Company(
+        name="Zijin Mining Group",
+        short_name="Zijin Mining",
+        ticker_primary="ZIJMF",
+        ticker_display="ZIJMF / 2899 (HKEX / OTC)",
+        exchange="OTC / HKEX",
+        color="#D9534F",
+        category="Major / Conglomerate",
+        relevance="Operador de Buriticá (ex-Continental Gold)",
+        tradingview_symbol="OTC:ZIJMF",
+        secondary_tickers=["2899.HK"],
+    ),
+    Company(
+        name="AngloGold Ashanti plc",
+        short_name="AngloGold",
+        ticker_primary="AU",
+        ticker_display="AU (NYSE)",
+        exchange="NYSE",
+        color="#F0AD4E",
+        category="Major / Conglomerate",
+        relevance="Quebradona y La Colosa (Colombia)",
+        tradingview_symbol="NYSE:AU",
+    ),
+    Company(
+        name="Lundin Mining Corp.",
+        short_name="Lundin Mining",
+        ticker_primary="LUN.TO",
+        ticker_display="LUN (TSX)",
+        exchange="TSX",
+        color="#5BC0DE",
+        category="Major / Conglomerate",
+        relevance="Pórfidos Cu-Au andinos",
+        tradingview_symbol="TSX:LUN",
+    ),
+    Company(
+        name="Newmont Corporation",
+        short_name="Newmont",
+        ticker_primary="NEM",
+        ticker_display="NEM (NYSE)",
+        exchange="NYSE",
+        color="#4A90E2",
+        category="Major / Conglomerate",
+        relevance="Líder mundial metales preciosos",
+        tradingview_symbol="NYSE:NEM",
+    ),
+    Company(
+        name="Barrick Gold Corp.",
+        short_name="Barrick Gold",
+        ticker_primary="GOLD",
+        ticker_display="GOLD (NYSE)",
+        exchange="NYSE",
+        color="#E67E22",
+        category="Major / Conglomerate",
+        relevance="Productor Global Tier-1 Gold/Copper",
+        tradingview_symbol="NYSE:GOLD",
     ),
 ]
 
@@ -82,9 +233,16 @@ TICKER_MAP: Dict[str, Company] = {c.ticker_primary: c for c in COMPANIES}
 TARGET: Company = next(c for c in COMPANIES if c.is_target)
 ALL_TICKERS: List[str] = [c.ticker_primary for c in COMPANIES]
 
-# Benchmark index (for Beta calculation)
-BENCHMARK_TICKER  = "XEG.TO"
-BENCHMARK_DISPLAY = "XEG (TSX)"
+# Reference Indices
+BENCHMARK_INDICES: Dict[str, Dict] = {
+    "^IXIC": {"name": "NASDAQ Composite", "display": "NASDAQ (^IXIC)", "color": "#00A8E8"},
+    "GDXJ":  {"name": "VanEck Junior Gold Miners ETF", "display": "GDXJ (Junior Gold)", "color": "#FF9900"},
+    "GDX":   {"name": "VanEck Gold Miners ETF", "display": "GDX (Gold Miners)", "color": "#FFCC00"},
+    "XEG.TO": {"name": "iShares TSX Energy", "display": "XEG (TSX)", "color": "#5C6B73"},
+}
+
+BENCHMARK_TICKER  = "^IXIC"
+BENCHMARK_DISPLAY = "NASDAQ (^IXIC)"
 
 # ── DATA PARAMETERS ──────────────────────────────────────────
 

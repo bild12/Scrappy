@@ -130,11 +130,13 @@ def fetch_all_histories(
     period: str = cfg.PERIOD_1Y,
 ) -> Dict[str, pd.DataFrame]:
     """
-    Batch download history for all tickers.
+    Batch download history for all tickers, indices, and secondary quotes.
     Returns {ticker: DataFrame} for tickers that succeeded.
     """
     if tickers is None:
-        tickers = cfg.ALL_TICKERS + [cfg.BENCHMARK_TICKER]
+        index_tickers = list(cfg.BENCHMARK_INDICES.keys())
+        secondary_cnl = ["CNL", "GG1.F"]
+        tickers = list(dict.fromkeys(cfg.ALL_TICKERS + index_tickers + secondary_cnl))
 
     results: Dict[str, pd.DataFrame] = {}
     for ticker in tickers:
@@ -152,7 +154,9 @@ def fetch_all_quotes(tickers: list[str] | None = None) -> Dict[str, Dict]:
     Returns {ticker: quote_dict}.
     """
     if tickers is None:
-        tickers = cfg.ALL_TICKERS
+        index_tickers = list(cfg.BENCHMARK_INDICES.keys())
+        secondary_cnl = ["CNL", "GG1.F"]
+        tickers = list(dict.fromkeys(cfg.ALL_TICKERS + index_tickers + secondary_cnl))
 
     results: Dict[str, Dict] = {}
     for ticker in tickers:
@@ -160,6 +164,30 @@ def fetch_all_quotes(tickers: list[str] | None = None) -> Dict[str, Dict]:
         if quote is not None:
             results[ticker] = quote
     return results
+
+
+def fetch_cnl_multimarket_quotes() -> Dict[str, Dict]:
+    """
+    Fetch quotes for all 3 Collective Mining market listings (TSX, NYSE, Frankfurt).
+    """
+    quotes = {}
+    for key, market in cfg.CNL_MULTIMARKET_TICKERS.items():
+        q = fetch_current_quote(market["symbol"])
+        if q:
+            q["market_label"] = key
+            q["display_name"] = market["display"]
+            q["tradingview"]  = market["tv"]
+            quotes[key] = q
+        else:
+            quotes[key] = {
+                "market_label": key,
+                "display_name": market["display"],
+                "tradingview": market["tv"],
+                "price": None,
+                "change_1d_pct": None,
+                "currency": market["currency"],
+            }
+    return quotes
 
 
 # ── YTD & PERIOD RETURNS ─────────────────────────────────────

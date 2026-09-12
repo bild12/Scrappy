@@ -309,6 +309,13 @@ hr, [data-testid="stMarkdownContainer"] hr{
   border:1px solid currentColor;
 }
 .cm-company{ font-size:var(--fs-caption); color:var(--text-muted); margin-left:8px; }
+.cm-badge{
+  display:inline-block; padding:2px 7px; border-radius:3px;
+  font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+}
+.cm-badge-target{ background:rgba(32,167,201,0.12); color:#20A7C9; border:1px solid rgba(32,167,201,0.35); }
+.cm-badge-mid{ background:rgba(224,109,83,0.12); color:#E06D53; border:1px solid rgba(224,109,83,0.35); }
+.cm-badge-major{ background:rgba(30,90,128,0.12); color:#1E5A80; border:1px solid rgba(30,90,128,0.35); }
 .cm-table-note{
   margin:var(--space-2) 0 0; font-size:11px; color:var(--text-faint);
   letter-spacing:.02em;
