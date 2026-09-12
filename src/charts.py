@@ -86,20 +86,43 @@ def _base_layout(**kwargs) -> dict:
 
 def chart_normalized_performance(
     normalized_df: pd.DataFrame,
+    selected_tickers: list[str] | None = None,
     title: str = "Relative Price Performance (Base 100)",
 ) -> go.Figure:
     """
     Multi-line chart rebased to 100 at the start of the period.
-    CNL is rendered thicker and in gold.
+    Supports filtering by selected_tickers, and highlights CNL.
+    Reference indices (NASDAQ, GDXJ, GDX) are shown with dashed lines.
     """
     fig = go.Figure()
 
-    for ticker in normalized_df.columns:
+    if normalized_df.empty:
+        return fig
+
+    columns_to_plot = selected_tickers if selected_tickers else list(normalized_df.columns)
+
+    for ticker in columns_to_plot:
+        if ticker not in normalized_df.columns:
+            continue
+
         company = cfg.TICKER_MAP.get(ticker)
-        color   = company.color if company else cfg.CHART_NEUTRAL
-        name    = company.short_name if company else ticker
-        width   = 3 if (company and company.is_target) else 1.5
-        dash    = "solid"
+        index_info = cfg.BENCHMARK_INDICES.get(ticker)
+
+        if company:
+            color = company.color
+            name  = company.short_name
+            width = 3.5 if company.is_target else 2.0
+            dash  = "solid"
+        elif index_info:
+            color = index_info["color"]
+            name  = index_info["display"]
+            width = 2.0
+            dash  = "dash"
+        else:
+            color = cfg.CHART_NEUTRAL
+            name  = ticker
+            width = 1.5
+            dash  = "solid"
 
         fig.add_trace(go.Scatter(
             x=normalized_df.index,
@@ -452,3 +475,79 @@ def _hex_to_rgb(hex_color: str) -> str:
     h = hex_color.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"{r}, {g}, {b}"
+
+
+# ── 8. TRADINGVIEW EMBED WIDGET ──────────────────────────────
+
+def render_tradingview_widget(symbol: str = "TSX:CNL", height: int = 480) -> str:
+    """
+    Returns HTML string for TradingView Advanced Real-Time Chart widget.
+    Can be rendered via st.components.v1.html(html_code, height=height).
+    """
+    container_id = f"tv_chart_{symbol.replace(':', '_').replace('.', '_')}"
+    return f"""
+    <div class="tradingview-widget-container" style="height:{height}px;width:100%;">
+      <div id="{container_id}" style="height:calc(100% - 32px);width:100%;"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget({{
+        "autosize": true,
+        "symbol": "{symbol}",
+        "interval": "D",
+        "timezone": "America/New_York",
+        "theme": "light",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#f1f3f6",
+        "enable_publishing": false,
+        "allow_symbol_change": true,
+        "container_id": "{container_id}"
+      }});
+      </script>
+    </div>
+    """
+
+
+# ── 9. INDEX COMPARISON (BETA & CORRELATION) ──────────────────
+
+def chart_index_comparison(multi_index_data: dict, metric: str = "beta") -> go.Figure:
+    """
+    Grouped bar chart comparing CNL's Beta or Correlation vs indices (^IXIC, GDXJ, GDX, XEG.TO)
+    across windows: 1M, 3M, 1Y.
+    """
+    fig = go.Figure()
+
+    if not multi_index_data:
+        return fig
+
+    windows = ["1M", "3M", "1Y"]
+
+    for idx_symbol, data in multi_index_data.items():
+        display = data.get("display", idx_symbol)
+        color   = data.get("color", cfg.CHART_ACCENT)
+        win_data = data.get("windows", {})
+
+        y_vals = []
+        for w in windows:
+            val = win_data.get(w, {}).get(metric)
+            y_vals.append(val if val is not None else 0)
+
+        fig.add_trace(go.Bar(
+            x=windows,
+            y=y_vals,
+            name=display,
+            marker_color=color,
+            hovertemplate=f"<b>{display}</b><br>Window: %{{x}}<br>{metric.title()}: %{{y:.3f}}<extra></extra>",
+        ))
+
+    title_label = "Beta Relative to Reference Indices" if metric == "beta" else "Pearson Correlation vs Reference Indices"
+
+    fig.update_layout(
+        title=_title(title_label, size=13),
+        barmode="group",
+        xaxis_title="Time Window",
+        yaxis_title=metric.title(),
+        **_base_layout(),
+    )
+    return fig
+

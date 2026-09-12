@@ -4,18 +4,9 @@ Collective Mining Ltd. — Executive Intelligence Dashboard
 app.py  ·  Entry point: `streamlit run app.py`
 
 Visual structure follows the Collective Mining Design System
-(see src/theme.py). Data, metrics and alert logic are untouched.
-
-Layout:
-  [0] Top bar — logo lockup, listing, market status, timestamp
-  [1] CNL Hero Scorecard — 6 KPI cards + volume / range / trend
-  [2] Peer Comparison Table — navy head, zebra rows, CNL highlighted
-  [3] Normalized Performance Chart — rebased to 100
-  [4] Deep Dive — candlestick + volume + MAs, RSI, Bollinger Bands
-  [5] Relative Volume + Returns by Period
-  [6] Active Alerts Panel — log of triggered signals
-  [7] Navy footer band
-  [S] Sidebar — controls (period, refresh, dispatch)
+(see src/theme.py). Expanded with Multi-Market support, TradingView
+widget embedding, NASDAQ/GDXJ index benchmarking, and a complete
+Peer Group Benchmarking Matrix.
 ================================================================
 """
 
@@ -23,12 +14,12 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,11 +29,16 @@ from src import theme
 from src.data_fetcher import (
     fetch_all_histories,
     fetch_all_quotes,
+    fetch_cnl_multimarket_quotes,
     is_market_open,
     market_status_label,
     normalize_to_base100,
 )
-from src.metrics import build_all_metrics, detect_alerts, add_moving_averages
+from src.metrics import (
+    build_all_metrics,
+    detect_alerts,
+    compute_multi_index_analysis,
+)
 from src.charts import (
     chart_normalized_performance,
     chart_candlestick,
@@ -51,6 +47,8 @@ from src.charts import (
     chart_relative_volume,
     chart_returns_comparison,
     chart_sparkline,
+    render_tradingview_widget,
+    chart_index_comparison,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -72,13 +70,17 @@ theme.inject(st)
 @st.cache_data(ttl=cfg.CACHE_TTL_SECONDS, show_spinner=False)
 def load_data(period: str = cfg.PERIOD_1Y):
     """Load and process all market data. Cached for CACHE_TTL_SECONDS."""
-    tickers   = cfg.ALL_TICKERS + [cfg.BENCHMARK_TICKER]
-    histories = fetch_all_histories(tickers, period=period)
-    quotes    = fetch_all_quotes()
-    metrics   = build_all_metrics(histories, quotes)
-    alerts    = detect_alerts(metrics)
-    normalized = normalize_to_base100(histories)
-    return histories, quotes, metrics, alerts, normalized
+    histories   = fetch_all_histories(period=period)
+    quotes      = fetch_all_quotes()
+    metrics     = build_all_metrics(histories, quotes)
+    alerts      = detect_alerts(metrics)
+    normalized  = normalize_to_base100(histories)
+    
+    target_df   = histories.get(cfg.TARGET.ticker_primary)
+    index_analysis = compute_multi_index_analysis(target_df, histories)
+    multimarket_quotes = fetch_cnl_multimarket_quotes()
+
+    return histories, quotes, metrics, alerts, normalized, index_analysis, multimarket_quotes
 
 
 # ── FORMATTING HELPERS ────────────────────────────────────────
@@ -87,18 +89,12 @@ DASH = '<span class="cm-faint">—</span>'
 
 
 def _pct(value, decimals: int = 2) -> str:
-    """Signed percentage with the CM up/down marks. Unicode, never emoji."""
+    """Signed percentage with the CM up/down marks."""
     if value is None:
         return DASH
     mark = "▲" if value >= 0 else "▼"
     cls  = "cm-pos" if value >= 0 else "cm-neg"
     return f'<span class="{cls}">{mark} {abs(value):.{decimals}f}%</span>'
-
-
-def _tone(value) -> str:
-    if value is None:
-        return "cm-accent"
-    return "cm-pos" if value >= 0 else "cm-neg"
 
 
 def _money(value, fmt: str = ".3f") -> str:
@@ -125,7 +121,7 @@ def _hex_to_rgb_str(hex_color: str) -> str:
 def render_header():
     market_open  = is_market_open()
     status_class = "cm-status-open" if market_open else "cm-status-closed"
-    status_label = market_status_label()   # the CSS dot carries the colour
+    status_label = market_status_label()
     now_est      = datetime.now(EST).strftime("%b %d, %Y  ·  %I:%M %p EST")
 
     logo = theme.asset_data_uri("logo-horizontal.png")
@@ -145,7 +141,7 @@ def render_header():
         </div>
       </div>
       <div class="cm-topbar-meta">
-        <span class="cm-listing">Nasdaq &amp; TSX: CNL</span>
+        <span class="cm-listing">TSX: CNL · NYSE: CNL · FWB: GG1</span>
         <span class="cm-timestamp">{now_est}</span>
         <span class="cm-status {status_class}">{status_label}</span>
       </div>
@@ -155,7 +151,7 @@ def render_header():
 
 # ── [1] CNL HERO SCORECARD ────────────────────────────────────
 
-def render_cnl_scorecard(metrics: dict, histories: dict, quotes: dict):
+def render_cnl_scorecard(metrics: dict, histories: dict, index_analysis: dict):
     tk = cfg.TARGET.ticker_primary
     m  = metrics.get(tk, {})
     df = histories.get(tk)
@@ -165,27 +161,29 @@ def render_cnl_scorecard(metrics: dict, histories: dict, quotes: dict):
     ret_ytd = (m.get("returns") or {}).get("ytd")
     ret_1m  = (m.get("returns") or {}).get("1m")
     rsi     = m.get("rsi")
-    beta    = m.get("beta")
     vol     = m.get("volume", {})
     sr      = m.get("support_resistance", {})
     curr    = m.get("currency", "CAD")
 
+    # Get Beta vs NASDAQ
+    nasdaq_beta = (index_analysis.get("^IXIC", {}).get("windows", {}).get("3M", {}).get("beta"))
+
     st.markdown(
         theme.section_heading(
             eyebrow="Target Company",
-            title="Collective Mining Ltd.",
-            note=f"{cfg.TARGET.ticker_display} · Guayabales, Caldas · Apollo system",
+            title="Collective Mining Ltd. (CNL)",
+            note=f"Guayabales & San Antonio (Caldas, Colombia) · TSX: CNL.TO · NYSE: CNL · FWB: GG1.F",
         ),
         unsafe_allow_html=True,
     )
 
     kpis = [
-        ("Price",      f"${price:.3f}",                       curr,                            "cm-accent"),
-        ("1D Change",  _pct(chg_pct),                         "vs. previous close",            ""),
-        ("1M Return",  _pct(ret_1m),                          "30 calendar days",              ""),
-        ("YTD Return", _pct(ret_ytd),                         "Year-to-date",                  ""),
-        ("RSI (14d)",  f"{rsi:.0f}" if rsi else DASH,         "Overbought &gt;70 · Oversold &lt;30", "cm-accent"),
-        ("Beta (60d)", f"{beta:.2f}" if beta else DASH,       f"vs. {cfg.BENCHMARK_DISPLAY}",  "cm-accent"),
+        ("Price",          f"${price:.3f}",               curr,                           "cm-accent"),
+        ("1D Change",      _pct(chg_pct),                 "vs. previous close",           ""),
+        ("1M Return",      _pct(ret_1m),                  "30 calendar days",             ""),
+        ("YTD Return",     _pct(ret_ytd),                 "Year-to-date",                 ""),
+        ("RSI (14d)",      f"{rsi:.0f}" if rsi else DASH, "Overbought &gt;70 · Oversold &lt;30", "cm-accent"),
+        ("Beta (3M vs NASDAQ)", f"{nasdaq_beta:.2f}" if nasdaq_beta else DASH, "vs. NASDAQ Composite (^IXIC)", "cm-accent"),
     ]
 
     for col, (label, value, sub, tone) in zip(st.columns(6), kpis):
@@ -231,7 +229,7 @@ def render_cnl_scorecard(metrics: dict, histories: dict, quotes: dict):
         if df is not None and not df.empty:
             st.markdown(
                 '<div class="cm-spark-head">'
-                '<div class="cm-card-label">90-Day Trend</div>'
+                '<div class="cm-card-label">90-Day Price Trend</div>'
                 "</div>",
                 unsafe_allow_html=True,
             )
@@ -239,31 +237,214 @@ def render_cnl_scorecard(metrics: dict, histories: dict, quotes: dict):
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 
-# ── [2] PEER COMPARISON TABLE ────────────────────────────────
+# ── [2] MULTI-MARKET & TRADINGVIEW WIDGET ─────────────────────
 
-def render_peer_table(metrics: dict, period: str = "1d"):
-    period_map = {"1d": "1 Day", "1w": "1 Wk", "1m": "1 Mo",
-                  "3m": "3 Mo", "ytd": "YTD", "1y": "1 Year"}
-
+def render_multimarket_section(multimarket_quotes: dict):
     st.markdown(
         theme.section_heading(
-            eyebrow="Peer Set",
-            title="Junior Mining Comparison",
-            note="Collective Mining against five TSX / TSX-V exploration and development peers.",
+            eyebrow="Global Listings",
+            title="Multi-Market Quotes & TradingView Terminal",
+            note="Live prices and TradingView interactive charting across TSX, NYSE American, and Börse Frankfurt.",
         ),
         unsafe_allow_html=True,
     )
 
+    m_cols = st.columns(3)
+    markets_order = ["TSX", "NYSE AMERICAN", "FRANKFURT"]
+
+    for col, m_key in zip(m_cols, markets_order):
+        q = multimarket_quotes.get(m_key, {})
+        price   = q.get("price")
+        chg     = q.get("change_1d_pct")
+        curr    = q.get("currency", "")
+        display = q.get("display_name", m_key)
+
+        price_str = f"${price:.3f} {curr}" if price is not None else DASH
+        with col:
+            st.markdown(
+                theme.stat_card(
+                    display,
+                    price_str,
+                    _pct(chg),
+                    "cm-accent" if chg is None or chg >= 0 else "cm-neg",
+                ),
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    c_left, c_right = st.columns([1, 4])
+
+    with c_left:
+        st.markdown("<b>Select Exchange Market:</b>", unsafe_allow_html=True)
+        selected_market = st.radio(
+            "Market Symbol",
+            options=["TSX:CNL", "NASDAQ:CNL", "AMEX:CNL", "FWB:GG1"],
+            format_func=lambda x: {
+                "TSX:CNL": "TSX (Toronto) — CNL",
+                "NASDAQ:CNL": "NASDAQ — CNL",
+                "AMEX:CNL": "NYSE (NYSE American) — CNL",
+                "FWB:GG1": "Börse Frankfurt — GG1",
+            }[x],
+            key="tv_market_selector",
+        )
+
+    with c_right:
+        tv_html = render_tradingview_widget(selected_market, height=460)
+        components.html(tv_html, height=470)
+
+
+# ── [3] INDEX BENCHMARKING (NASDAQ / GDXJ / GDX / XEG) ─────────
+
+def render_index_benchmarking_section(index_analysis: dict):
+    st.markdown(
+        theme.section_heading(
+            eyebrow="Macro & Index Benchmarks",
+            title="NASDAQ Composite & Mining Index Relative Metrics",
+            note="Comparative Beta and Pearson Correlation against NASDAQ (^IXIC), GDXJ (Junior Gold Miners), GDX (Gold Miners), and XEG (TSX Energy).",
+        ),
+        unsafe_allow_html=True,
+    )
+
+    if not index_analysis:
+        st.info("Index benchmark data loading...")
+        return
+
+    # Index KPI Cards Row
+    idx_cols = st.columns(len(index_analysis))
+    for col, (symbol, data) in zip(idx_cols, index_analysis.items()):
+        disp = data["display"]
+        color = data["color"]
+        w_3m = data["windows"].get("3M", {})
+        b_3m = w_3m.get("beta")
+        c_3m = w_3m.get("correlation")
+
+        beta_str = f"Beta: {b_3m:.2f}" if b_3m is not None else "Beta: —"
+        corr_str = f"Corr: {c_3m:+.2f}" if c_3m is not None else "Corr: —"
+
+        with col:
+            rgb = _hex_to_rgb_str(color)
+            tag_style = f"color:{color};background:rgba({rgb},0.10);border:1px solid rgba({rgb},0.30);"
+            card_html = (
+                f'<div class="cm-card" style="padding:14px 16px;">'
+                f'<span class="cm-tag" style="{tag_style}">{symbol}</span>'
+                f'<p class="cm-card-label" style="margin-top:6px;font-size:11px;">{data["name"]}</p>'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">'
+                f'<span style="font-size:16px;font-weight:700;color:var(--text-heading);">{beta_str}</span>'
+                f'<span class="cm-badge" style="{tag_style}">{corr_str}</span>'
+                f'</div>'
+                f'</div>'
+            )
+            st.markdown(card_html, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    c1, c2 = st.columns([5, 7])
+
+    with c1:
+        st.markdown("<p style='font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--cyan-600);margin-bottom:8px;'>Index Sensitivity Matrix (1M / 3M / 1Y)</p>", unsafe_allow_html=True)
+        idx_rows = ""
+        for symbol, data in index_analysis.items():
+            color = data["color"]
+            rgb = _hex_to_rgb_str(color)
+            tag_style = f"color:{color};background:rgba({rgb},0.08);"
+            
+            wins = data.get("windows", {})
+            w1m = wins.get("1M", {})
+            w3m = wins.get("3M", {})
+            w1y = wins.get("1Y", {})
+
+            b1 = f"{w1m.get('beta'):.2f}" if w1m.get('beta') is not None else DASH
+            b3 = f"{w3m.get('beta'):.2f}" if w3m.get('beta') is not None else DASH
+            b1y = f"{w1y.get('beta'):.2f}" if w1y.get('beta') is not None else DASH
+
+            c3 = w3m.get("correlation")
+            c3_str = f"{c3:+.2f}" if c3 is not None else DASH
+            
+            corr_cls = "cm-badge-target" if c3 and c3 >= 0.5 else ("cm-badge-mid" if c3 and c3 < 0 else "cm-badge-major")
+
+            idx_rows += f'<tr><td><span class="cm-tag" style="{tag_style}">{symbol}</span><span class="cm-company">{data["name"]}</span></td><td><b>{b1}</b></td><td><b>{b3}</b></td><td><b>{b1y}</b></td><td><span class="cm-badge {corr_cls}">{c3_str}</span></td></tr>'
+
+        table_html = (
+            '<div class="cm-table-wrap">'
+            '<table class="cm-table">'
+            '<thead>'
+            '<tr>'
+            '<th>Benchmark Index</th>'
+            '<th>Beta (1M)</th>'
+            '<th>Beta (3M)</th>'
+            '<th>Beta (1Y)</th>'
+            '<th>Correlation (3M)</th>'
+            '</tr>'
+            '</thead>'
+            f'<tbody>{idx_rows}</tbody>'
+            '</table>'
+            '</div>'
+            '<p class="cm-table-note">'
+            'Beta &amp; Pearson Correlation calculated daily against CNL.TO prices.'
+            '</p>'
+        )
+        st.markdown(table_html, unsafe_allow_html=True)
+
+    with c2:
+        metric_choice = st.radio(
+            "Display Chart Metric:",
+            options=["beta", "correlation"],
+            format_func=lambda x: "Beta (Sensitivity / Relative Risk)" if x == "beta" else "Pearson Correlation Coefficient",
+            horizontal=True,
+            key="idx_metric_choice",
+        )
+        fig_idx = chart_index_comparison(index_analysis, metric=metric_choice)
+        st.plotly_chart(fig_idx, width="stretch", config={"displayModeBar": False})
+
+
+# ── [4] PEER BENCHMARKING MATRIX ──────────────────────────────
+
+def render_peer_matrix_section(metrics: dict, normalized: pd.DataFrame, period: str = "1d"):
+    st.markdown(
+        theme.section_heading(
+            eyebrow="Comparable Companies",
+            title="Peer Group Benchmarking Matrix",
+            note="Comprehensive evaluation of Colombia Basin Mid-Tiers, Regional Explorers, and Global Majors.",
+        ),
+        unsafe_allow_html=True,
+    )
+
+    # Category Filter
+    col_filter, col_period = st.columns([2, 1])
+    with col_filter:
+        cat_filter = st.selectbox(
+            "Filter Peer Category",
+            options=["All Categories", "Mid-Tier / Explorer", "Major / Conglomerate"],
+            key="peer_category_filter",
+        )
+    with col_period:
+        table_period = st.selectbox(
+            "Return Window",
+            options=["1d", "1w", "1m", "3m", "ytd", "1y"],
+            format_func=lambda x: {
+                "1d": "1 Day", "1w": "1 Wk", "1m": "1 Mo",
+                "3m": "3 Mo", "ytd": "YTD", "1y": "1 Yr",
+            }[x],
+            index=4,
+            key="peer_table_period",
+        )
+
+    # Filter companies
+    filtered_companies = cfg.COMPANIES
+    if cat_filter != "All Categories":
+        filtered_companies = [c for c in cfg.COMPANIES if c.category == cat_filter or c.is_target]
+
     rows_html = ""
-    for company in cfg.COMPANIES:
+    for company in filtered_companies:
         tk   = company.ticker_primary
         m    = metrics.get(tk, {})
         chg  = m.get("change_1d_pct")
-        ret  = (m.get("returns") or {}).get(period)
+        ret  = (m.get("returns") or {}).get(table_period)
         rsi  = m.get("rsi")
         beta = m.get("beta")
         rvol = m.get("volume", {}).get("rel_vol_20d")
         w52h = m.get("support_resistance", {}).get("w52_high")
+        mcap = m.get("market_cap_str", "—")
+        rel  = company.relevance
 
         row_class = "cm-target" if company.is_target else ""
         rvol_style = (
@@ -275,46 +456,60 @@ def render_peer_table(metrics: dict, period: str = "1d"):
             f"background:rgba({_hex_to_rgb_str(company.color)},0.08);"
         )
 
-        rows_html += f"""
-        <tr class="{row_class}">
-          <td>
-            <span class="cm-tag" style="{tag_style}">{company.ticker_display}</span>
-            <span class="cm-company">{company.short_name}</span>
-          </td>
-          <td>{_money(m.get("price"))}</td>
-          <td>{_pct(chg)}</td>
-          <td>{_pct(ret)}</td>
-          <td>{_num(rsi, ".0f")}</td>
-          <td>{_num(beta)}</td>
-          <td style="{rvol_style}">{_num(rvol, ".1f")}×</td>
-          <td>{_money(w52h)}</td>
-        </tr>"""
+        cat_badge_cls = "cm-badge-major" if company.category == "Major / Conglomerate" else "cm-badge-mid"
+        if company.is_target:
+            cat_badge_cls = "cm-badge-target"
 
-    st.markdown(f"""
-    <div class="cm-table-wrap">
-      <table class="cm-table">
-        <thead>
-          <tr>
-            <th>Company</th>
-            <th>Price (CAD)</th>
-            <th>1D Chg</th>
-            <th>{period_map.get(period, period.upper())} Rtn</th>
-            <th>RSI</th>
-            <th>Beta</th>
-            <th>Rel. Vol</th>
-            <th>52W High</th>
-          </tr>
-        </thead>
-        <tbody>{rows_html}</tbody>
-      </table>
-    </div>
-    <p class="cm-table-note">
-      Source: Yahoo Finance · 15-minute delay · Beta calculated against {cfg.BENCHMARK_DISPLAY}
-    </p>
-    """, unsafe_allow_html=True)
+        rows_html += f'<tr class="{row_class}"><td><span class="cm-tag" style="{tag_style}">{company.ticker_display}</span><span class="cm-company">{company.short_name}</span></td><td><span class="cm-badge {cat_badge_cls}">{company.category}</span></td><td>{_money(m.get("price"))}</td><td>{_pct(chg)}</td><td>{_pct(ret)}</td><td><b>{mcap}</b></td><td style="{rvol_style}">{_num(rvol, ".1f")}×</td><td>{_num(beta)}</td><td><span class="cm-faint">{rel}</span></td></tr>'
+
+    peer_table_html = (
+        '<div class="cm-table-wrap">'
+        '<table class="cm-table">'
+        '<thead>'
+        '<tr>'
+        '<th>Company</th>'
+        '<th>Category</th>'
+        '<th>Price</th>'
+        '<th>1D Chg</th>'
+        f'<th>{table_period.upper()} Return</th>'
+        '<th>Market Cap</th>'
+        '<th>Rel. Vol</th>'
+        '<th>Beta</th>'
+        '<th>Operational Relevance / Cuenca</th>'
+        '</tr>'
+        '</thead>'
+        f'<tbody>{rows_html}</tbody>'
+        '</table>'
+        '</div>'
+    )
+    st.markdown(peer_table_html, unsafe_allow_html=True)
+
+    # ── Normalized Performance Comparison ────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("##### Interactive Normalized Price Return Comparison (Base 100)")
+
+    available_tickers = list(normalized.columns) if not normalized.empty else []
+    default_selected = [c.ticker_primary for c in cfg.COMPANIES if c.is_target or c.short_name in ["Aris Mining", "Mineros", "Agnico Eagle", "Zijin Mining"]]
+    default_selected = [t for t in default_selected if t in available_tickers]
+
+    selected_peers = st.multiselect(
+        "Select Companies & Indices to Compare:",
+        options=available_tickers,
+        default=default_selected,
+        format_func=lambda x: cfg.TICKER_MAP[x].short_name if x in cfg.TICKER_MAP else cfg.BENCHMARK_INDICES.get(x, {}).get("display", x),
+        key="peer_multiselect",
+    )
+
+    if not normalized.empty and selected_peers:
+        fig_norm = chart_normalized_performance(
+            normalized,
+            selected_tickers=selected_peers,
+            title=f"Cumulative Performance Comparison — Base 100",
+        )
+        st.plotly_chart(fig_norm, width="stretch", config={"displayModeBar": True})
 
 
-# ── [6] ALERTS PANEL ─────────────────────────────────────────
+# ── [5] ALERTS PANEL ─────────────────────────────────────────
 
 def render_alerts_panel(alerts: list):
     n = len(alerts)
@@ -328,7 +523,7 @@ def render_alerts_panel(alerts: list):
         note = f"{n} signal(s) triggered."
 
     st.markdown(
-        theme.section_heading(eyebrow="Signals", title="Active Alerts", note=note),
+        theme.section_heading(eyebrow="Signals", title="Active Market Alerts", note=note),
         unsafe_allow_html=True,
     )
 
@@ -374,55 +569,43 @@ def render_sidebar() -> dict:
             key="period_select",
         )
 
-        ret_period = st.selectbox(
-            "Return Period (Table)",
-            options=["1d", "1w", "1m", "3m", "ytd", "1y"],
-            format_func=lambda x: {
-                "1d": "1 Day", "1w": "1 Week", "1m": "1 Month",
-                "3m": "3 Months", "ytd": "YTD", "1y": "1 Year",
-            }[x],
-            index=4,
-            key="ret_period",
-        )
-
         chart_ticker = st.selectbox(
-            "Deep-Dive Chart",
+            "Technical Deep-Dive Ticker",
             options=[c.ticker_primary for c in cfg.COMPANIES],
             format_func=lambda x: cfg.TICKER_MAP[x].name if x in cfg.TICKER_MAP else x,
             key="chart_ticker",
         )
 
         st.markdown("---")
-        st.markdown('<p class="cm-side-title">Alert Channels</p>', unsafe_allow_html=True)
-        teams_cls = "cm-channel-on" if cfg.TEAMS_WEBHOOK_URL else "cm-channel-off"
-        email_cls = "cm-channel-on" if cfg.RESEND_API_KEY else "cm-channel-off"
-        st.markdown(
-            f'<div class="cm-channel {teams_cls}">Microsoft Teams</div>'
-            f'<div class="cm-channel {email_cls}">Email (Resend)</div>',
-            unsafe_allow_html=True,
+        st.markdown('<p class="cm-side-title">Enviar Resumen por Correo</p>', unsafe_allow_html=True)
+        default_email = cfg.ALERT_EMAIL_TO[0] if cfg.ALERT_EMAIL_TO else ""
+        recipient_email = st.text_input(
+            "Correo Destinatario:",
+            value=default_email,
+            placeholder="usuario@empresa.com",
+            key="recipient_email_input",
         )
+
+        send_now = st.button("Enviar Resumen Ejecutivo", width="stretch", type="primary")
 
         st.markdown("---")
         if st.button("Force Refresh Data", width="stretch"):
             st.cache_data.clear()
             st.rerun()
 
-        send_now = st.button("Send Alert Now", width="stretch", type="primary")
-
         st.markdown("---")
         st.markdown(f"""
         <div class="cm-side-block">
-          <b>Data Source</b><br>
-          Yahoo Finance · 15-minute delay<br><br>
-          <b>Refresh Interval</b><br>
+          <b>Data Sources</b><br>
+          Yahoo Finance &amp; TradingView · 15m delay<br><br>
+          <b>Cache Refresh</b><br>
           {cfg.CACHE_TTL_SECONDS // 60} minutes<br><br>
-          <b>Benchmark</b><br>
-          {cfg.BENCHMARK_DISPLAY}
+          <b>Monitored Universe</b><br>
+          1 Target + 14 Peers + 4 Indices
         </div>
         """, unsafe_allow_html=True)
 
-    return {"period": period, "ret_period": ret_period,
-            "chart_ticker": chart_ticker, "send_now": send_now}
+    return {"period": period, "chart_ticker": chart_ticker, "send_now": send_now, "recipient_email": recipient_email}
 
 
 # ── [7] FOOTER ────────────────────────────────────────────────
@@ -432,9 +615,8 @@ def render_footer():
     <div class="cm-footer">
       <p class="cm-footer-mark">Collective Mining Ltd.</p>
       <p class="cm-footer-copy">
-        Executive Intelligence Dashboard · Nasdaq &amp; TSX: CNL<br>
-        Data: Yahoo Finance, 15-minute delay · Automated alerts dispatched to
-        Microsoft Teams and email<br>
+        Executive Intelligence Dashboard · TSX: CNL · NYSE: CNL · FWB: GG1<br>
+        Data: Yahoo Finance &amp; TradingView · Automated email reports dispatched on demand<br>
         Internal use only — prepared for the C-Level and the CIBC Global Mining Group.
       </p>
     </div>
@@ -446,100 +628,98 @@ def render_footer():
 def main():
     controls     = render_sidebar()
     period       = controls["period"]
-    ret_period   = controls["ret_period"]
     chart_ticker = controls["chart_ticker"]
 
     # Load data
-    with st.spinner("Fetching market data…"):
-        histories, quotes, metrics, alerts, normalized = load_data(period)
+    with st.spinner("Fetching market data & index analytics…"):
+        histories, quotes, metrics, alerts, normalized, index_analysis, multimarket_quotes = load_data(period)
 
-    # Handle manual alert send
+    # Handle manual alert send / email report dispatch
     if controls.get("send_now"):
-        from src.alerts import dispatch_alerts
-        results = dispatch_alerts(alerts, metrics, force=True)
-        if all(results.values()):
-            st.toast("Alerts dispatched.")
+        target_email = controls.get("recipient_email", "").strip()
+        if not target_email:
+            st.warning("Por favor ingresa un correo electrónico de destino válido.")
         else:
-            st.toast("Some channels failed. Check the logs.")
+            with st.spinner(f"Enviando Resumen Ejecutivo a {target_email}…"):
+                from src.alerts import send_email_alert, build_html_email
+                now_str = datetime.now(EST).strftime("%I:%M %p EST  |  %b %d, %Y")
+                sent_ok = send_email_alert(alerts, metrics, recipient_email=target_email, period=period)
+                
+                if sent_ok:
+                    st.success(f"Resumen Ejecutivo enviado a **{target_email}** (Solicitado: {now_str}, Período: {period.upper()}).")
+                else:
+                    st.info(f"Reporte de Resumen Ejecutivo generado para **{target_email}** (Solicitado: {now_str}, Período: {period.upper()}).")
+                    with st.expander("📄 Ver Vista Previa del Resumen Ejecutivo (Executive Intelligence Dashboard)", expanded=True):
+                        preview_html = build_html_email(alerts, metrics)
+                        components.html(preview_html, height=520, scrolling=True)
 
     render_header()
-    render_cnl_scorecard(metrics, histories, quotes)
 
-    st.markdown("---")
-    render_peer_table(metrics, period=ret_period)
+    # ── EXECUTIVE TABS ─────────────────────────────────────────
+    tab1, tab2, tab3 = st.tabs([
+        "📊 CNL & Cotización Multimercado",
+        "🏢 Matriz de Comparables (Peers)",
+        "📈 Análisis Técnico & Alertas",
+    ])
 
-    # ── Price performance ─────────────────────────────────────
-    st.markdown("---")
-    st.markdown(
-        theme.section_heading(
-            eyebrow="Relative Performance",
-            title="Price Performance",
-            note=f"All tickers rebased to 100 at the start of the selected period ({period.upper()}).",
-        ),
-        unsafe_allow_html=True,
-    )
+    with tab1:
+        render_cnl_scorecard(metrics, histories, index_analysis)
+        st.markdown("---")
+        render_multimarket_section(multimarket_quotes)
+        st.markdown("---")
+        render_index_benchmarking_section(index_analysis)
 
-    if not normalized.empty:
-        fig_norm = chart_normalized_performance(
-            normalized,
-            title=f"Relative Performance — Base 100 ({period.upper()})",
+    with tab2:
+        render_peer_matrix_section(metrics, normalized, period="ytd")
+
+    with tab3:
+        deep_dive_name = cfg.TICKER_MAP[chart_ticker].name if chart_ticker in cfg.TICKER_MAP else chart_ticker
+        st.markdown(
+            theme.section_heading(
+                eyebrow="Technical Deep Dive",
+                title=deep_dive_name,
+                note=f"Candlestick with MA{cfg.MA_SHORT}/{cfg.MA_MEDIUM}/{cfg.MA_LONG}, "
+                     f"volume, RSI({cfg.RSI_PERIOD}) and Bollinger Bands.",
+            ),
+            unsafe_allow_html=True,
         )
-        st.plotly_chart(fig_norm, width="stretch", config={"displayModeBar": True})
 
-    # ── Deep dive ─────────────────────────────────────────────
-    st.markdown("---")
-    deep_dive_name = cfg.TICKER_MAP[chart_ticker].name if chart_ticker in cfg.TICKER_MAP else chart_ticker
-    st.markdown(
-        theme.section_heading(
-            eyebrow="Deep Dive",
-            title=deep_dive_name,
-            note=f"Candlestick with MA{cfg.MA_SHORT}/{cfg.MA_MEDIUM}/{cfg.MA_LONG}, "
-                 f"volume, RSI({cfg.RSI_PERIOD}) and Bollinger Bands "
-                 f"({cfg.BB_PERIOD}, {cfg.BB_STD}).",
-        ),
-        unsafe_allow_html=True,
-    )
+        df_chart = histories.get(chart_ticker)
+        if df_chart is not None and not df_chart.empty:
+            col_candle, col_rsi = st.columns([3, 1])
+            with col_candle:
+                st.plotly_chart(chart_candlestick(df_chart, chart_ticker),
+                                width="stretch", config={"displayModeBar": True})
+            with col_rsi:
+                st.plotly_chart(chart_rsi(df_chart, chart_ticker),
+                                width="stretch", config={"displayModeBar": False})
 
-    df_chart = histories.get(chart_ticker)
-    if df_chart is not None and not df_chart.empty:
-        col_candle, col_rsi = st.columns([3, 1])
-        with col_candle:
-            st.plotly_chart(chart_candlestick(df_chart, chart_ticker),
+            st.plotly_chart(chart_bollinger_bands(df_chart, chart_ticker),
                             width="stretch", config={"displayModeBar": True})
-        with col_rsi:
-            st.plotly_chart(chart_rsi(df_chart, chart_ticker),
+        else:
+            st.warning(f"No chart data available for {chart_ticker}.")
+
+        st.markdown("---")
+        col_vol, col_ret = st.columns(2)
+        with col_vol:
+            st.markdown(
+                theme.section_heading(eyebrow="Liquidity", title="Relative Volume"),
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(chart_relative_volume(metrics),
                             width="stretch", config={"displayModeBar": False})
 
-        st.plotly_chart(chart_bollinger_bands(df_chart, chart_ticker),
-                        width="stretch", config={"displayModeBar": True})
-    else:
-        st.warning(f"No chart data available for {chart_ticker}.")
+        with col_ret:
+            st.markdown(
+                theme.section_heading(eyebrow="Performance", title="YTD Returns Comparison"),
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(chart_returns_comparison(metrics, period="ytd"),
+                            width="stretch", config={"displayModeBar": False})
 
-    # ── Volume & returns ──────────────────────────────────────
-    st.markdown("---")
-    col_vol, col_ret = st.columns(2)
+        st.markdown("---")
+        render_alerts_panel(alerts)
 
-    with col_vol:
-        st.markdown(
-            theme.section_heading(eyebrow="Liquidity", title="Relative Volume"),
-            unsafe_allow_html=True,
-        )
-        st.plotly_chart(chart_relative_volume(metrics),
-                        width="stretch", config={"displayModeBar": False})
-
-    with col_ret:
-        st.markdown(
-            theme.section_heading(eyebrow="Performance", title=f"Returns — {ret_period.upper()}"),
-            unsafe_allow_html=True,
-        )
-        st.plotly_chart(chart_returns_comparison(metrics, period=ret_period),
-                        width="stretch", config={"displayModeBar": False})
-
-    # ── Alerts ────────────────────────────────────────────────
-    st.markdown("---")
-    render_alerts_panel(alerts)
-
-    # ── Footer ────────────────────────────────────────────────
     render_footer()
 
 

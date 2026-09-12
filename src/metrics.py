@@ -176,7 +176,7 @@ def support_resistance(df: pd.DataFrame) -> Dict:
     }
 
 
-# ── BETA ─────────────────────────────────────────────────────
+# ── BETA & CORRELATION ────────────────────────────────────────
 
 def compute_beta(
     stock_df: pd.DataFrame,
@@ -201,6 +201,60 @@ def compute_beta(
     return round(float(cov_matrix[0, 1] / var_bench), 3)
 
 
+def compute_correlation(
+    stock_df: pd.DataFrame,
+    benchmark_df: pd.DataFrame,
+    window: int = cfg.BETA_PERIOD_DAYS,
+) -> Optional[float]:
+    """
+    Pearson correlation coefficient between stock returns and benchmark returns.
+    """
+    if stock_df is None or benchmark_df is None:
+        return None
+    stock_ret = stock_df["Close"].pct_change().dropna()
+    bench_ret = benchmark_df["Close"].pct_change().dropna()
+    combined  = pd.DataFrame({"stock": stock_ret, "bench": bench_ret}).dropna().tail(window)
+    if len(combined) < 10:
+        return None
+    corr = combined["stock"].corr(combined["bench"])
+    return round(float(corr), 3) if not np.isnan(corr) else None
+
+
+def compute_multi_index_analysis(
+    target_df: pd.DataFrame,
+    histories: Dict[str, pd.DataFrame],
+) -> Dict[str, Dict]:
+    """
+    Computes Beta and Correlation of Collective Mining against key reference indices
+    (NASDAQ Composite ^IXIC, GDXJ, GDX, XEG.TO) across windows: 1M (21d), 3M (63d), 1Y (252d).
+    """
+    if target_df is None or target_df.empty:
+        return {}
+
+    windows = {"1M": 21, "3M": 63, "1Y": 252}
+    results = {}
+
+    for idx_symbol, idx_info in cfg.BENCHMARK_INDICES.items():
+        idx_df = histories.get(idx_symbol)
+        if idx_df is None or idx_df.empty:
+            continue
+        
+        idx_metrics = {}
+        for w_label, w_days in windows.items():
+            b = compute_beta(target_df, idx_df, window=w_days)
+            c = compute_correlation(target_df, idx_df, window=w_days)
+            idx_metrics[w_label] = {"beta": b, "correlation": c}
+
+        results[idx_symbol] = {
+            "name": idx_info["name"],
+            "display": idx_info["display"],
+            "color": idx_info["color"],
+            "windows": idx_metrics,
+        }
+
+    return results
+
+
 # ── FULL METRICS BUNDLE ───────────────────────────────────────
 
 def build_company_metrics(
@@ -218,6 +272,8 @@ def build_company_metrics(
 
     from src.data_fetcher import compute_period_return
 
+    company = cfg.TICKER_MAP.get(ticker)
+
     rsi_series = compute_rsi(df)
     bb_df      = compute_bollinger_bands(df)
     vol_stats  = volume_metrics(df)
@@ -232,22 +288,40 @@ def build_company_metrics(
 
     returns = {p: compute_period_return(df, p) for p in ["1d", "1w", "1m", "3m", "ytd", "1y"]}
 
+    # Market Cap formatting
+    mcap = quote.get("market_cap") if quote else None
+    mcap_str = None
+    if mcap:
+        if mcap >= 1_000_000_000:
+            mcap_str = f"${mcap / 1_000_000_000:.2f}B"
+        elif mcap >= 1_000_000:
+            mcap_str = f"${mcap / 1_000_000:.1f}M"
+        else:
+            mcap_str = f"${mcap:,.0f}"
+
     return {
-        "ticker":        ticker,
-        "price":         quote.get("price", latest_close) if quote else latest_close,
-        "currency":      quote.get("currency", "CAD") if quote else "CAD",
-        "change_1d_pct": quote.get("change_1d_pct", returns.get("1d")) if quote else returns.get("1d"),
-        "returns":       returns,
-        "beta":          beta,
-        "rsi":           round(latest_rsi, 1) if latest_rsi is not None else None,
-        "rsi_signal":    _rsi_signal(latest_rsi),
-        "bb_upper":      latest_bb_u,
-        "bb_lower":      latest_bb_l,
-        "volume":        vol_stats,
+        "ticker":             ticker,
+        "company_name":       company.name if company else ticker,
+        "short_name":         company.short_name if company else ticker,
+        "category":           company.category if company else "Peer",
+        "relevance":          company.relevance if company else "",
+        "tradingview_symbol": company.tradingview_symbol if company else ticker,
+        "price":              quote.get("price", latest_close) if quote else latest_close,
+        "currency":           quote.get("currency", "CAD") if quote else "CAD",
+        "change_1d_pct":      quote.get("change_1d_pct", returns.get("1d")) if quote else returns.get("1d"),
+        "market_cap":         mcap,
+        "market_cap_str":     mcap_str or "—",
+        "returns":            returns,
+        "beta":               beta,
+        "rsi":                round(latest_rsi, 1) if latest_rsi is not None else None,
+        "rsi_signal":         _rsi_signal(latest_rsi),
+        "bb_upper":           latest_bb_u,
+        "bb_lower":           latest_bb_l,
+        "volume":             vol_stats,
         "support_resistance": sr,
-        "ma_crossover":  ma_cross,
-        "week52_high":   sr.get("w52_high"),
-        "week52_low":    sr.get("w52_low"),
+        "ma_crossover":       ma_cross,
+        "week52_high":        sr.get("w52_high"),
+        "week52_low":         sr.get("w52_low"),
     }
 
 
