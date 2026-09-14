@@ -577,16 +577,16 @@ def render_sidebar() -> dict:
         )
 
         st.markdown("---")
-        st.markdown('<p class="cm-side-title">Enviar Resumen por Correo</p>', unsafe_allow_html=True)
+        st.markdown('<p class="cm-side-title">Email Executive Summary</p>', unsafe_allow_html=True)
         default_email = cfg.ALERT_EMAIL_TO[0] if cfg.ALERT_EMAIL_TO else ""
         recipient_email = st.text_input(
-            "Correo Destinatario:",
+            "Recipient Email:",
             value=default_email,
-            placeholder="usuario@empresa.com",
+            placeholder="executive@collectivemining.com",
             key="recipient_email_input",
         )
 
-        send_now = st.button("Enviar Resumen Ejecutivo", width="stretch", type="primary")
+        send_now = st.button("Send Executive Summary", width="stretch", type="primary")
 
         st.markdown("---")
         if st.button("Force Refresh Data", width="stretch"):
@@ -638,18 +638,18 @@ def main():
     if controls.get("send_now"):
         target_email = controls.get("recipient_email", "").strip()
         if not target_email:
-            st.warning("Por favor ingresa un correo electrónico de destino válido.")
+            st.warning("Please enter a valid recipient email address.")
         else:
-            with st.spinner(f"Enviando Resumen Ejecutivo a {target_email}…"):
+            with st.spinner(f"Sending Executive Summary to {target_email}…"):
                 from src.alerts import send_email_alert, build_html_email
                 now_str = datetime.now(EST).strftime("%I:%M %p EST  |  %b %d, %Y")
                 sent_ok = send_email_alert(alerts, metrics, recipient_email=target_email, period=period)
                 
                 if sent_ok:
-                    st.success(f"Resumen Ejecutivo enviado a **{target_email}** (Solicitado: {now_str}, Período: {period.upper()}).")
+                    st.success(f"Executive Summary sent to **{target_email}** (Requested: {now_str}, Period: {period.upper()}).")
                 else:
-                    st.info(f"Reporte de Resumen Ejecutivo generado para **{target_email}** (Solicitado: {now_str}, Período: {period.upper()}).")
-                    with st.expander("📄 Ver Vista Previa del Resumen Ejecutivo (Executive Intelligence Dashboard)", expanded=True):
+                    st.info(f"Executive Summary report generated for **{target_email}** (Requested: {now_str}, Period: {period.upper()}).")
+                    with st.expander("📄 View Executive Summary Preview (Executive Intelligence Dashboard)", expanded=True):
                         preview_html = build_html_email(alerts, metrics)
                         components.html(preview_html, height=520, scrolling=True)
 
@@ -657,9 +657,9 @@ def main():
 
     # ── EXECUTIVE TABS ─────────────────────────────────────────
     tab1, tab2, tab3 = st.tabs([
-        "📊 CNL & Cotización Multimercado",
-        "🏢 Matriz de Comparables (Peers)",
-        "📈 Análisis Técnico & Alertas",
+        "📊 CNL & Multi-Market Overview",
+        "🏢 Peer Group Matrix",
+        "📈 Technical Analysis & Alerts",
     ])
 
     with tab1:

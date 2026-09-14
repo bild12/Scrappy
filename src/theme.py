@@ -392,6 +392,52 @@ hr, [data-testid="stMarkdownContainer"] hr{
   color:var(--neutral-0) !important; background:transparent !important;
 }
 
+/* Text inputs in Sidebar — ensures crystal-clear visibility while typing */
+[data-testid="stSidebar"] [data-baseweb="input"],
+[data-testid="stSidebar"] [data-baseweb="base-input"],
+[data-testid="stSidebar"] [data-testid="stTextInput"] > div > div,
+[data-testid="stSidebar"] .stTextInput > div > div {
+  background: rgba(255,255,255,.08) !important;
+  border: 1px solid var(--border-on-inverse) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+[data-testid="stSidebar"] [data-baseweb="input"]:focus-within,
+[data-testid="stSidebar"] [data-baseweb="base-input"]:focus-within,
+[data-testid="stSidebar"] [data-testid="stTextInput"] > div > div:focus-within {
+  border-color: var(--cyan-500) !important;
+  box-shadow: var(--focus-ring) !important;
+  background: rgba(255,255,255,.14) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stTextInput"] input,
+[data-testid="stSidebar"] .stTextInput input,
+[data-testid="stSidebar"] [data-baseweb="input"] input,
+[data-testid="stSidebar"] [data-baseweb="base-input"] input {
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  caret-color: var(--cyan-400) !important;
+  background: transparent !important;
+  font-family: var(--font-display) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 8px 12px !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stTextInput"] input::placeholder,
+[data-testid="stSidebar"] .stTextInput input::placeholder {
+  color: rgba(255, 255, 255, 0.45) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* Ensure Main App text inputs also render with high contrast */
+[data-testid="stMain"] [data-testid="stTextInput"] input,
+[data-testid="stMain"] .stTextInput input {
+  color: var(--text-heading) !important;
+  -webkit-text-fill-color: var(--text-heading) !important;
+  caret-color: var(--cyan-600) !important;
+}
+
 /* Dropdown popovers are hard-edged too */
 [data-testid="portal"] [role="listbox"],
 .react-aria-Popover, [data-baseweb="popover"] [role="listbox"]{
