@@ -127,13 +127,13 @@ COMPANIES: List[Company] = [
     Company(
         name="Outcrop Silver & Gold",
         short_name="Outcrop",
-        ticker_primary="OCG.V",
-        ticker_display="OCG (TSX-V)",
-        exchange="TSX-V",
+        ticker_primary="OCG.TO",
+        ticker_display="OCG (TSX)",
+        exchange="TSX",
         color="#A8B0B8",
         category="Mid-Tier / Explorer",
         relevance="Santa Ana (Tolima, Ag-Au)",
-        tradingview_symbol="TSXV:OCG",
+        tradingview_symbol="TSX:OCG",
     ),
     Company(
         name="Orosur Mining Inc.",
@@ -149,13 +149,13 @@ COMPANIES: List[Company] = [
     Company(
         name="Denarius Metals Corp.",
         short_name="Denarius",
-        ticker_primary="DMET.V",
-        ticker_display="DMET (TSX-V)",
-        exchange="TSX-V",
+        ticker_primary="DMET.NE",
+        ticker_display="DMET (CBOE / NEO)",
+        exchange="CBOE",
         color="#6A5ACD",
         category="Mid-Tier / Explorer",
         relevance="Zancudo & Titiribí (Antioquia)",
-        tradingview_symbol="TSXV:DMET",
+        tradingview_symbol="NEO:DMET",
     ),
     # GROUP B: MAJORS & GLOBAL CONGLOMERATES
     Company(

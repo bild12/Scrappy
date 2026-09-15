@@ -88,17 +88,37 @@ def fetch_current_quote(ticker: str) -> Optional[Dict]:
     """
     try:
         tk = yf.Ticker(ticker)
-        info = tk.fast_info
-        price      = info.last_price
-        prev_close = info.previous_close
+        price = None
+        prev_close = None
+        volume = 0
+        day_volume = 0
+        market_cap = None
+        week52_high = None
+        week52_low = None
+        currency = "CAD"
+
+        try:
+            info = tk.fast_info
+            price = getattr(info, "last_price", None)
+            prev_close = getattr(info, "previous_close", None)
+            volume = int(getattr(info, "three_month_average_volume", 0) or 0)
+            day_volume = int(getattr(info, "last_volume", 0) or 0)
+            market_cap = getattr(info, "market_cap", None)
+            week52_high = getattr(info, "year_high", getattr(info, "fifty_two_week_high", None))
+            week52_low = getattr(info, "year_low", getattr(info, "fifty_two_week_low", None))
+            currency = getattr(info, "currency", "CAD") or "CAD"
+        except Exception as fast_exc:
+            logger.debug("fast_info unavailable for %s: %s", ticker, fast_exc)
 
         if price is None or prev_close is None:
             # Fallback: use last close from recent history
             hist = fetch_history(ticker, period="5d", interval="1d")
             if hist is None or hist.empty:
                 return None
-            price      = float(hist["Close"].iloc[-1])
+            price = float(hist["Close"].iloc[-1])
             prev_close = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
+            if day_volume == 0 and "Volume" in hist.columns:
+                day_volume = int(hist["Volume"].iloc[-1])
 
         change_1d     = price - prev_close
         change_1d_pct = (change_1d / prev_close) * 100 if prev_close else 0.0
@@ -108,15 +128,12 @@ def fetch_current_quote(ticker: str) -> Optional[Dict]:
             "prev_close":    round(float(prev_close), 4),
             "change_1d":     round(float(change_1d), 4),
             "change_1d_pct": round(float(change_1d_pct), 2),
-            "volume":        int(getattr(info, "three_month_average_volume", 0) or 0),
-            "day_volume":    int(getattr(info, "last_volume", 0) or 0),
-            "market_cap":    getattr(info, "market_cap", None),
-            # yfinance ≥1.1 uses year_high/year_low; older used fifty_two_week_*
-            "week52_high":   getattr(info, "year_high",
-                             getattr(info, "fifty_two_week_high", None)),
-            "week52_low":    getattr(info, "year_low",
-                             getattr(info, "fifty_two_week_low",  None)),
-            "currency":      getattr(info, "currency", "CAD") or "CAD",
+            "volume":        volume,
+            "day_volume":    day_volume,
+            "market_cap":    market_cap,
+            "week52_high":   week52_high,
+            "week52_low":    week52_low,
+            "currency":      currency,
         }
     except Exception as exc:
         logger.error("fetch_current_quote(%s) failed: %s", ticker, exc)

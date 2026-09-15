@@ -234,7 +234,7 @@ def render_cnl_scorecard(metrics: dict, histories: dict, index_analysis: dict):
                 unsafe_allow_html=True,
             )
             fig = chart_sparkline(df, cfg.TARGET, days=90)
-            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 # ── [2] MULTI-MARKET & TRADINGVIEW WIDGET ─────────────────────
@@ -393,7 +393,7 @@ def render_index_benchmarking_section(index_analysis: dict):
             key="idx_metric_choice",
         )
         fig_idx = chart_index_comparison(index_analysis, metric=metric_choice)
-        st.plotly_chart(fig_idx, width="stretch", config={"displayModeBar": False})
+        st.plotly_chart(fig_idx, use_container_width=True, config={"displayModeBar": False})
 
 
 # ── [4] PEER BENCHMARKING MATRIX ──────────────────────────────
@@ -506,7 +506,7 @@ def render_peer_matrix_section(metrics: dict, normalized: pd.DataFrame, period: 
             selected_tickers=selected_peers,
             title=f"Cumulative Performance Comparison — Base 100",
         )
-        st.plotly_chart(fig_norm, width="stretch", config={"displayModeBar": True})
+        st.plotly_chart(fig_norm, use_container_width=True, config={"displayModeBar": True})
 
 
 # ── [5] ALERTS PANEL ─────────────────────────────────────────
@@ -586,10 +586,10 @@ def render_sidebar() -> dict:
             key="recipient_email_input",
         )
 
-        send_now = st.button("Send Executive Summary", width="stretch", type="primary")
+        send_now = st.button("Send Executive Summary", use_container_width=True, type="primary")
 
         st.markdown("---")
-        if st.button("Force Refresh Data", width="stretch"):
+        if st.button("Force Refresh Data", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
@@ -689,13 +689,13 @@ def main():
             col_candle, col_rsi = st.columns([3, 1])
             with col_candle:
                 st.plotly_chart(chart_candlestick(df_chart, chart_ticker),
-                                width="stretch", config={"displayModeBar": True})
+                                use_container_width=True, config={"displayModeBar": True})
             with col_rsi:
                 st.plotly_chart(chart_rsi(df_chart, chart_ticker),
-                                width="stretch", config={"displayModeBar": False})
+                                use_container_width=True, config={"displayModeBar": False})
 
             st.plotly_chart(chart_bollinger_bands(df_chart, chart_ticker),
-                            width="stretch", config={"displayModeBar": True})
+                            use_container_width=True, config={"displayModeBar": True})
         else:
             st.warning(f"No chart data available for {chart_ticker}.")
 
@@ -707,7 +707,7 @@ def main():
                 unsafe_allow_html=True,
             )
             st.plotly_chart(chart_relative_volume(metrics),
-                            width="stretch", config={"displayModeBar": False})
+                            use_container_width=True, config={"displayModeBar": False})
 
         with col_ret:
             st.markdown(
@@ -715,7 +715,7 @@ def main():
                 unsafe_allow_html=True,
             )
             st.plotly_chart(chart_returns_comparison(metrics, period="ytd"),
-                            width="stretch", config={"displayModeBar": False})
+                            use_container_width=True, config={"displayModeBar": False})
 
         st.markdown("---")
         render_alerts_panel(alerts)
